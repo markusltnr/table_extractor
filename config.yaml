@@ -1,0 +1,62 @@
+table_viewpoint:
+    contour_approx_param: 0.035
+    viewpoint_edge_dist: 0.2 #viewpoint will be created 20cm away from table edge
+    viewpoint_dist_param: 0.4
+    check_plan: False
+
+table_extractor:
+    normals_thresh: 0.2 #used to filter out points that don't belong to horizontal planes. 
+                        #If |x| or |y| of the normal is bigger than the threshold, the point is removed from the cloud. 
+    reconstruction_file: "/home/v4r/Markus_L/sasha_lab_reconstruction/SashaRoom/test1/transformed_scene1_pred_legend_21.ply"
+    downsample_vox_size: 0.02 # voxel size for downsampling
+    remove_radius_outlier_nbpoints: 4 #12
+    remove_radius_outlier_radius:  0.05 #0.1
+    cluster_dbscan_eps: 0.05 # 0.1 # Density parameter that is used to find neighbouring points.
+    cluster_dbscan_minpoints: 10 #20 Minimum number of points to form a cluster.
+    min_cluster_size_param: 0.01 # minimum 1% of pointcloud have to be in plane 
+    map_height: 500
+    map_width: 500
+    map_deltax: 4.0
+    map_deltay: 7.0
+    map_resolution: 0.03
+    class_labels: [2,3,5,6,9,11,13,14,31,37,38] 
+    colors: [[190, 153, 112],  # wall
+    [189, 198, 255],  # floor
+    [213, 255, 0],  # cabinet
+    [158, 0, 142],  # bed
+    [152, 255, 82],  # chair
+    [119, 77, 0],  # sofa
+    [122, 71, 130],  # table
+    [0, 174, 126],  # door
+    [0, 125, 181],  # window
+    [0, 143, 156],  # bookshelf
+    [107, 104, 130],  # picture
+    [255, 229, 2],  # counter
+    [117, 68, 177],  # blinds
+    [1, 255, 254],  # desk
+    [0, 21, 68],  # shelves
+    [255, 166, 254],  # curtain
+    [194, 140, 159],  # dresser
+    [98, 14, 0],  # pillow
+    [0, 71, 84],  # mirror
+    [255, 219, 102],  # floor mat
+    [0, 118, 255],  # clothes
+    [67, 0, 44],  # ceiling
+    [1, 208, 255],  # books
+    [232, 94, 190],  # refrigerator
+    [145, 208, 203],  # television
+    [255, 147, 126],  # paper
+    [95, 173, 78],  # towel
+    [0, 100, 1],  # shower curtain
+    [255, 238, 232],  # box
+    [0, 155, 255],  # whiteboard
+    [255, 0, 86],  # person
+    [189, 211, 147],  # night stand
+    [133, 169, 0],  # toilet
+    [149, 0, 58],  # sink
+    [255, 2, 157],  # lamp
+    [187, 136, 0],  # bathtub
+    [0, 185, 23],  # bag
+    [1, 0, 103],  # otherstructure
+    [0, 0, 255],  # otherfurn
+    [255, 0, 246]] # otherprop

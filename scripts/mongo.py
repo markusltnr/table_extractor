@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 import open3d as o3d
 import numpy as np
 import rospy
@@ -6,7 +8,7 @@ from std_msgs.msg import Header
 from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs.point_cloud2 as pc2
 from primitect_msgs.srv import Primitect
-from primitect_msgs.msg import Table
+from primitect_msgs.msg import primitectTable as Table
 from visualization_msgs.msg import Marker
 import time
 import cv2 as cv
@@ -26,10 +28,21 @@ msg_store = MessageStoreProxy()
 try:
 
     centers = []
-    for msg, meta in msg_store.query(Table2._type):
+    for msg, meta in msg_store.query(Table._type):
+        #print(msg)
+        #map_pub = rospy.Publisher('table_map', OccupancyGrid, queue_size=1, latch=True)
+        #map_pub.publish(msg)
         print(msg)
+        print(meta)
         print('')
+        #rospy.sleep(100)
         #msg_store.delete(str(meta.get('_id')))
+        # msg_store.delete('601d47707b41cd73141636ca')
+        # msg_store.delete('601d47707b41cd73141636cb')
+        # msg_store.delete('601d47707b41cd73141636cc')
+        # msg_store.delete('601d47707b41cd73141636cd')
+
+    exit()
     for msg, meta in msg_store.query(Table._type):
         if len(centers) == 0:
             centers.append(msg.center)
