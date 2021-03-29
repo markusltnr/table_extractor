@@ -39,7 +39,7 @@ tmux send-keys enter
 tmux send-keys "source /home/v4r/Markus_L/devel/setup.bash"
 tmux send-keys enter
 tmux send-keys "cd /home/v4r/Markus_L/src/table_extractor/scripts/" C-m
-tmux send-keys "python table_extractor.py"
+tmux send-keys "python table_extractor_script.py"
 # Attach to session
 tmux -2 attach-session -t $SESSION
 

@@ -22,6 +22,7 @@ from table_extractor.msg import Plane
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Header
 from visualization_msgs.msg import Marker
+from region_growing import RegionGrowing
 
 rospack = rospkg.RosPack()
 path = rospack.get_path('table_extractor')
@@ -105,6 +106,13 @@ orig_cloud_pub.publish(o3dToROS(pcd))
 #downsample cloud
 pcd = pcd.voxel_down_sample(voxel_size=dwn_vox)
 
+#compute normals and filter out any points that are not on horizontal area
+pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+normals = np.asarray(pcd.normals)
+pcd = pcd.select_down_sample(np.where((abs(normals[:, 0]) < normals_thresh) 
+                                                & (abs(normals[:, 1]) < normals_thresh))[0])
+scene = pcd
+
 #select only points from certain class labels by color
 color = -np.ones((np.asarray(pcd.colors).shape[0]))
 for point, i in zip(np.asarray(pcd.colors), range(len(pcd.colors))):
@@ -114,16 +122,9 @@ for point, i in zip(np.asarray(pcd.colors), range(len(pcd.colors))):
 index_interest = np.where(color > 0)[0]
 pcd = pcd.select_down_sample(index_interest)
 
-#compute normals and filter out any points that are not on horizontal area
-pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
-normals = np.asarray(pcd.normals)
-pcd = pcd.select_down_sample(np.where((abs(normals[:, 0]) < normals_thresh) 
-                                                & (abs(normals[:, 1]) < normals_thresh))[0])
-
 #publish cloud with horizontal areas only
 orig_cloud_interest_pub = rospy.Publisher('/orig_cloud_interest', PointCloud2, queue_size=10, latch=True)
 orig_cloud_interest_pub.publish(o3dToROS(pcd.remove_none_finite_points()))
-
 
 size_cof = len(pcd.points)
 outlier_cloud = pcd
@@ -149,41 +150,12 @@ while len(outlier_cloud.points)>size_cof*min_csp:
     h_planes.append(plane)
     h_plane_clouds.append(inlier_cloud)
 
-#     my_cloud = inlier_cloud
-#     idx = my_cloud.cluster_dbscan(eps, minpoints)
-#     values, count = np.unique(idx, return_counts=True)
-#     ind = np.argmax(count)
-
-#     cluster_idx = np.where(np.asarray(idx) == values[ind])
-#     my_cloud = my_cloud.select_down_sample(cluster_idx[0])
-
-#     bbx =  o3d.geometry.AxisAlignedBoundingBox([-10,-10,(-d+d/10)], [10,10,(-d-d/10)])
-#     print(bbx.get_extent())
-#     o3d.visualization.draw_geometries([bbx])
-
-#     cropped = pcd_orig.crop(bbx)
-#     cropped.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
-#     normals = np.asarray(cropped.normals)
-#     cropped_2 = cropped.select_down_sample(np.where((abs(normals[:, 0]) < normals_thresh) 
-#                                                     & (abs(normals[:, 1]) < normals_thresh))[0])
-#     cropped_2.paint_uniform_color([1,0,0])
-#     o3d.visualization.draw_geometries([cropped_2, inlier_cloud, bbx])
-#     idx = cropped_2.cluster_dbscan(eps, minpoints)
-#     values, count = np.unique(idx, return_counts=True)
-#     ind = np.argmax(count)
-
-#     cluster_idx = np.where(np.asarray(idx) == values[ind])
-#     cloud = cropped_2.select_down_sample(cluster_idx[0])
-#     o3d.visualization.draw_geometries([cloud, bbx])
-
-# exit()
-
-
-
 img = np.zeros([height, width, 1], dtype=np.int8)
 table = Table()
 h_planeclouds_clustered = []
 cloud_pubs = []
+
+rg = RegionGrowing(scene)
 
 i = 0
 #cluster all horizontal planes and store data
@@ -196,6 +168,10 @@ for planecloud, plane in zip(h_plane_clouds, h_planes):
         cluster_idx = np.where(np.asarray(idx) == c)
         cloud = planecloud.select_down_sample(cluster_idx[0])
         if len(cloud.points) > size_cof*min_csp:
+            #region growing
+            rg.set_plane(cloud)
+            cloud = rg.grow_region()
+            #publishing clouds
             cloud_pub = rospy.Publisher(
                 '/cloud'+str(i+1), PointCloud2, queue_size=10, latch=True)
             cloud = cloud.paint_uniform_color(colors[i])
@@ -248,6 +224,18 @@ cv.imwrite("table_map.pgm", img)
 
 map_pub.publish(table_map)
 #store_mongodb(msg_store, table_map)
+
+# rg = RegionGrowing(scene)
+# print('Starting region growing')
+# i = 1
+# clouds = []
+# for plane in h_planeclouds_clustered:
+#     rg.set_plane(plane)
+#     plane_new = rg.grow_region()
+#     clouds.append(plane_new)
+#     print('Region growing {} of {}'.format(i, len(h_planeclouds_clustered)))
+#     i = i+1
+
 try:
     p_id = msg_store.update_named('table_map', table_map, upsert=True)
 except rospy.ServiceException, e:
@@ -256,4 +244,6 @@ except rospy.ServiceException, e:
 print('Planes extracted')
 for cloud_pub, i in zip(cloud_pubs, range(len(cloud_pubs))):
     cloud_pub.publish(o3dToROS(h_planeclouds_clustered[i]))
+    #cloud_pub.publish(o3dToROS(clouds[i]))
+
 rospy.spin()
