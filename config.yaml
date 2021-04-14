@@ -1,3 +1,15 @@
+rosbag:
+    step_size: 25
+    series_size: 15
+    depth_topic: '/hsrb/head_rgbd_sensor/depth_registered/image_raw'
+    rgb_topic: '/hsrb/head_rgbd_sensor/rgb/image_raw'
+    tf_topic: '/tf' #sometimes without slash
+    depth_folder: '/home/markus/V4R/markus_ws/src/table_extractor/data/depth2/'
+    rgb_folder: '/home/markus/V4R/markus_ws/src/table_extractor/data/rgb2/'
+    txt_folder: '/home/markus/V4R/markus_ws/src/table_extractor/data/txt/'
+    bag_file: '/home/markus/V4R/test_data_MarkusLeitner/GH30_living_scene5-001.bag'
+    table_txt_file: '/home/markus/V4R/markus_ws/src/table_extractor/data/table.txt'
+
 table_viewpoint:
     contour_approx_param: 0.035
     viewpoint_edge_dist: 0.2 #viewpoint will be created 20cm away from table edge
@@ -7,13 +19,14 @@ table_viewpoint:
 table_extractor:
     normals_thresh: 0.2 #used to filter out points that don't belong to horizontal planes. 
                         #If |x| or |y| of the normal is bigger than the threshold, the point is removed from the cloud. 
-    reconstruction_file: "/home/v4r/Markus_L/sasha_lab_reconstruction/SashaRoom/test1/transformed_scene1_pred_legend_21.ply"
+    reconstruction_file: "/home/markus/V4R/test_data_MarkusLeitner/ORB+EF/GH30_living/transformed_scene2_withCT_from3_pred_legend_21.ply"
+    #reconstruction_file: "/home/markus/V4R/markus_ws/src/table_extractor/SashaRoom/test1/transformed_scene1_pred_legend_21.ply"
     downsample_vox_size: 0.02 # voxel size for downsampling
     remove_radius_outlier_nbpoints: 4 #12
     remove_radius_outlier_radius:  0.05 #0.1
-    cluster_dbscan_eps: 0.05 # 0.1 # Density parameter that is used to find neighbouring points.
+    cluster_dbscan_eps: 0.2 #0.05 # 0.1 # Density parameter that is used to find neighbouring points.
     cluster_dbscan_minpoints: 10 #20 Minimum number of points to form a cluster.
-    min_cluster_size_param: 0.01 # minimum 1% of pointcloud have to be in plane 
+    min_cluster_size_param: 0.03 # minimum 1% of pointcloud have to be in plane 
     map_height: 500
     map_width: 500
     map_deltax: 4.0
@@ -60,3 +73,19 @@ table_extractor:
     [1, 0, 103],  # otherstructure
     [0, 0, 255],  # otherfurn
     [255, 0, 246]] # otherprop
+
+camera_info:
+    header: 
+    seq: 332450
+    stamp: 
+        secs: 1567875018
+        nsecs: 437901012
+    frame_id: "head_rgbd_sensor_rgb_frame"
+    height: 480
+    width: 640
+    distortion_model: "plumb_bob"
+    D: [0.06221163438504582, -0.2196314239325009, -0.0001152980004131749, -0.0009528280601941514, 0.15652471413909]
+    K: [538.391033533567, 0.0, 315.3074696331638, 0.0, 538.085452058436, 233.0483557773859, 0.0, 0.0, 1.0]
+    R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    P: [538.391033533567, 0.0, 315.3074696331638, 0.0, 0.0, 538.085452058436, 233.0483557773859, 0.0, 0.0, 0.0, 1.0, 0.0]
+    binning_x: 0

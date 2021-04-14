@@ -1,15 +1,9 @@
 #!/usr/bin/python
 
-import time
-from copy import deepcopy
-
 import cv2 as cv
 import geometry_msgs
-import mongodb_store.util as dc_util
-import mongodb_store_msgs.srv as dc_srv
 import numpy as np
 import open3d as o3d
-import pymongo
 import ros_numpy
 import rospkg
 import rospy
@@ -21,7 +15,6 @@ from table_extractor.msg import Table
 from table_extractor.msg import Plane
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Header
-from visualization_msgs.msg import Marker
 from region_growing import RegionGrowing
 
 rospack = rospkg.RosPack()
