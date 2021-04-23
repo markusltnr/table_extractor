@@ -17,7 +17,7 @@ tmux split-window -v
 tmux select-pane -t 0
 tmux send-keys "hsrb_mode" 
 tmux send-keys enter
-tmux send-keys "source /home/v4r/Markus_L/devel/setup.bash"
+tmux send-keys "source /home/v4r/catkin_ws/devel/setup.bash"
 tmux send-keys enter
 tmux send-keys "roslaunch --wait mongodb_store mongodb_store.launch db_path:=/home/markus/V4R/mongo_db/table_store" C-m
 tmux select-pane -t 1
@@ -27,16 +27,16 @@ tmux send-keys "rviz" C-m
 tmux select-pane -t 2
 tmux send-keys "hsrb_mode"
 tmux send-keys enter
-tmux send-keys "source /home/v4r/Markus_L/devel/setup.bash"
+tmux send-keys "source /home/v4r/catkin_ws/devel/setup.bash"
 tmux send-keys enter
-tmux send-keys "cd /home/v4r/Markus_L/src/table_extractor/scripts/" C-m
+tmux send-keys "cd /home/v4r/catkin_ws/src/table_extractor/scripts/" C-m
 tmux send-keys "python table_extractor_script.py"
 tmux select-pane -t 3
 tmux send-keys "hsrb_mode"
 tmux send-keys enter
-tmux send-keys "source /home/v4r/Markus_L/devel/setup.bash"
+tmux send-keys "source /home/v4r/catkin_ws/devel/setup.bash"
 tmux send-keys enter
-tmux send-keys "cd /home/v4r/Markus_L/src/table_extractor/scripts/" C-m
+tmux send-keys "cd /home/v4r/catkin_ws/src/table_extractor/scripts/" C-m
 tmux send-keys "python read_rosbag.py"
 # Attach to session
 tmux -2 attach-session -t $SESSION

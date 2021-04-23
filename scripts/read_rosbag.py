@@ -13,7 +13,7 @@ from mongodb_store.message_store import MessageStoreProxy
 from sensor_msgs.msg import CameraInfo
 from table_extractor.msg import Table
 from tf_bag import BagTfTransformer
-
+import os
 
 rospack = rospkg.RosPack()
 path = rospack.get_path('table_extractor')
@@ -30,8 +30,15 @@ cam = PinholeCameraModel()
 cam.fromCameraInfo(ci)
 
 depth_folder = rosbag_conf['depth_folder']
+if not os.path.exists(depth_folder):
+    os.makedirs(depth_folder)
 rgb_folder = rosbag_conf['rgb_folder']
+if not os.path.exists(rgb_folder):
+    os.makedirs(rgb_folder)
 txt_folder = rosbag_conf['txt_folder']
+if not os.path.exists(txt_folder):
+    os.makedirs(txt_folder)
+
 
 depth_topic = rosbag_conf['depth_topic']
 rgb_topic = rosbag_conf['rgb_topic']
@@ -57,9 +64,9 @@ for msg, meta in msg_store.query(Table._type):
         bbx_points = np.concatenate((bbx_points, box_points), 0)
 points = np.array(bbx_points)
 table_txt_file.close()
+print('points received')
 
-
-i = 0
+#i = 2
 step_size = rosbag_conf['step_size']
 nr_of_tables = points.shape[0]/8
 bridge = CvBridge()
@@ -71,6 +78,14 @@ log = []
 depth_txt_file = open(txt_folder + "depth.txt", "w")
 rgb_txt_file = open(txt_folder + "rgb.txt", "w")
 log_txt_file = open(txt_folder + "log.txt", "w")
+depth_txt_files = []
+rgb_txt_files = []
+depth_folders = []
+rgb_folders = []
+for i in range(nr_of_tables):
+    depth_txt_files.append(open(txt_folder + "table_{}_".format(i) + "depth.txt", "w"))
+    rgb_txt_files.append(open(txt_folder + "table_{}_".format(i) + "rgb.txt", "w"))
+
 
 table_seen = np.zeros(nr_of_tables, dtype=bool)
 table_seen_prev = np.zeros(nr_of_tables, dtype=bool)
@@ -81,7 +96,7 @@ bag = rosbag.Bag(rosbag_conf['bag_file'])
 bag_transformer = BagTfTransformer(bag)
 for topic, msg, t in bag.read_messages(topics=[tf_topic ,depth_topic, rgb_topic]):
     if topic == tf_topic:
-#        if tf_count % step_size == 0:
+        if tf_count % step_size == 0:
             table_seen = np.zeros(nr_of_tables, dtype=bool)
             translation, q = bag_transformer.lookupTransform(cam.tf_frame, 'map', t) #q = x,y,z,w
             rot = tf3d.quaternions.quat2mat([q[3], q[0], q[1], q[2]]) #q = w,x,y,z
@@ -118,23 +133,60 @@ for topic, msg, t in bag.read_messages(topics=[tf_topic ,depth_topic, rgb_topic]
             table_seen_list = np.roll(table_seen_list, -1, 0)
             table_seen_list[-1,:] = table_seen
         #tf_count += 1
-    for i in range(nr_of_tables):
-        if topic==depth_topic and table_seen_prev[i]:
-            if depth_count[i] % step_size == 0:
-                depth_img_name = "table%02i_seq_depth%05i_occ%02i.png" % (i, depth_count[i]/step_size, table_occ[i])
-                cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
-                cv2.imwrite(depth_folder + depth_img_name, cv_img)       
-                depth_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " - " + depth_img_name + "\n")
-            depth_count[i] += 1
 
-        if topic==rgb_topic and table_seen_prev[i]:
-            if rgb_count[i] % step_size == 0:
-                rgb_img_name = "table%02i_seq_rgb%05i_occ%02i.png" % (i, depth_count[i]/step_size, table_occ[i])
-                cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
-                cv2.imwrite(rgb_folder + rgb_img_name, cv_img)        
-                rgb_txt_file.write("{:.9f} oder doch lieber ".format(t.to_sec()) + str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " - " + rgb_img_name + "\n")
-            rgb_count[i] += 1
-depth_txt_file.close()
-rgb_txt_file.close()
+
+    if topic==depth_topic:
+        if depth_count[0] % step_size == 0:
+            depth_img_name = "depth%05i.png" % (depth_count[0]/step_size)
+            cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
+            cv2.imwrite(depth_folder + depth_img_name, cv_img)       
+            for i in range(nr_of_tables):
+                if table_seen_prev[i]:
+                    depth_txt_file = depth_txt_files[i]
+                    depth_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " - " + depth_img_name + "\n")
+        depth_count[0] += 1
+    if topic==rgb_topic:
+        if rgb_count[0] % step_size == 0:
+            rgb_img_name = "rgb%05i.png" % (rgb_count[0]/step_size)
+            cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+            cv2.imwrite(rgb_folder + rgb_img_name, cv_img)
+            for i in range(nr_of_tables):
+                if table_seen_prev[i]:
+                    rgb_txt_file = rgb_txt_files[i]
+                    rgb_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " - " + rgb_img_name + "\n")
+        rgb_count[0] += 1
+
+    # if topic==rgb_topic:
+    # for i in range(nr_of_tables):
+    #     if topic==depth_topic and table_seen_prev[i]:
+    #         if depth_count[i] % step_size == 0:
+    #             depth_img_name = "table%02i_seq_depth%05i_occ%02i.png" % (i, depth_count[i]/step_size, table_occ[i])
+    #             #depth_img_name = "table%02i_seq_depth%05i_occ%02i.png" % (i, depth_count[i], table_occ[i])
+    #             cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
+    #             cv2.imwrite(depth_folders[i] + depth_img_name, cv_img)       
+    #             depth_txt_file = depth_txt_files[i]
+    #             depth_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " - " + depth_img_name + "\n")
+    #         #depth_count[i] = msg.header.stamp.secs
+    #         depth_count[i] += 1
+
+    #     if topic==rgb_topic and table_seen_prev[i]:
+    #         if rgb_count[i] % step_size == 0:
+    #             rgb_img_name = "table%02i_seq_rgb%05i_occ%02i.png" % (i, rgb_count[i]/step_size, table_occ[i])
+    #             #rgb_img_name = "table%02i_seq_rgb%05i_occ%02i.png" % (i, rgb_count[i], table_occ[i])
+    #             cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+    #             cv2.imwrite(rgb_folders[i] + rgb_img_name, cv_img)     
+    #             rgb_txt_file = rgb_txt_files[i]   
+    #             rgb_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " - " + rgb_img_name + "\n")
+    #         #rgb_count[i] = msg.header.stamp.secs
+    #         rgb_count[i] += 1
+
+for file in depth_txt_files:
+    file.close()
+for file in rgb_txt_files:
+    file.close()
+
+# depth_txt_file.close()
+# rgb_txt_file.close()
 log_txt_file.close()
+
 print(log)

@@ -4,11 +4,11 @@ rosbag:
     depth_topic: '/hsrb/head_rgbd_sensor/depth_registered/image_raw'
     rgb_topic: '/hsrb/head_rgbd_sensor/rgb/image_raw'
     tf_topic: '/tf' #sometimes without slash
-    depth_folder: '/home/markus/V4R/markus_ws/src/table_extractor/data/depth2/'
-    rgb_folder: '/home/markus/V4R/markus_ws/src/table_extractor/data/rgb2/'
-    txt_folder: '/home/markus/V4R/markus_ws/src/table_extractor/data/txt/'
-    bag_file: '/home/markus/V4R/test_data_MarkusLeitner/GH30_living_scene5-001.bag'
-    table_txt_file: '/home/markus/V4R/markus_ws/src/table_extractor/data/table.txt'
+    depth_folder: '/home/v4r/data/depth2/'
+    rgb_folder: '/home/v4r/data/rgb2/'
+    txt_folder: '/home/v4r/data/txt/'
+    bag_file: '/home/v4r/data/GH30_living_scene5-001.bag'
+    table_txt_file: '/home/v4r/data/table.txt'
 
 table_viewpoint:
     contour_approx_param: 0.035
