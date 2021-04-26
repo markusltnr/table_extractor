@@ -70,7 +70,7 @@ for msg, meta in msg_store.query(Table._type):
     bbx.header.frame_id = '/map'
     bbx.type = 4
     bbx.id = table_nr
-    bbx.points = box_points_ros#msg.points
+    bbx.points = msg.points
     bbx.pose.orientation.w = 1.0
     bbx.color.a = 1.0
     bbx.color.r = colors[table_nr][0]

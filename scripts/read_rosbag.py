@@ -15,6 +15,22 @@ from table_extractor.msg import Table
 from tf_bag import BagTfTransformer
 import os
 
+def check_topics(t, topics):
+    '''
+    check if topic t is in list of topics. Also check with t[1:], since the leading string could be missing. 
+    return topic if it is in there. 
+    exit program if not. 
+    '''
+    if t in topics:
+        pass
+    elif t[1:] in topics:
+        print('remove leading slash')
+        t = t[1:]
+    else:
+        print('Topic {} not found.'.format(t))
+        exit()
+    return t
+
 print('Rosbag extraction node')
 rospack = rospkg.RosPack()
 path = rospack.get_path('table_extractor')
@@ -45,30 +61,32 @@ depth_topic = rosbag_conf['depth_topic']
 rgb_topic = rosbag_conf['rgb_topic']
 tf_topic = rosbag_conf['tf_topic']
 
+# Check topics
+bag = rosbag.Bag(rosbag_conf['bag_file'])
+topics = bag.get_type_and_topic_info()[1].keys()
+rgb_topic = check_topics(rgb_topic, topics)
+depth_topic = check_topics(depth_topic, topics)
+tf_topic = check_topics(tf_topic, topics)
+
 table_txt_file = open(txt_folder + "table.txt", "w")
 centers = []
 bbx_points = None
 msg_store = MessageStoreProxy()
+nr_of_tables = len(msg_store.query(Table._type))
+i = 0
+hull_points = []
 for msg, meta in msg_store.query(Table._type):
     table_txt_file.write(str(msg)+"\n")
     points = []
     for point in msg.points:
-        points.append([point.x, point.y, point.z])
+        points.append([point.x, point.y, point.z, 1.0])
     points = np.array(points)
-    bbx = o3d.geometry.AxisAlignedBoundingBox.create_from_points(o3d.utility.Vector3dVector(points))
-    box_points = np.asarray(bbx.get_box_points())
-    ones = np.ones((8,1))
-    box_points = np.concatenate((box_points, ones), 1)
-    if bbx_points is None:
-        bbx_points = box_points
-    else:
-        bbx_points = np.concatenate((bbx_points, box_points), 0)
+    hull_points.append(points)
 points = np.array(bbx_points)
 table_txt_file.close()
 print('Points received')
 
 step_size = rosbag_conf['step_size']
-nr_of_tables = points.shape[0]/8
 bridge = CvBridge()
 depth_count = 0
 rgb_count = 0
@@ -90,7 +108,6 @@ table_seen_prev = np.zeros(nr_of_tables, dtype=bool)
 table_seen_list = np.zeros((rosbag_conf['series_size'], nr_of_tables), dtype=bool)
 table_occ = np.zeros(nr_of_tables, int)
 print('Fill Transformer from bag')
-bag = rosbag.Bag(rosbag_conf['bag_file'])
 bag_transformer = BagTfTransformer(bag)
 print('Check viewpoints')
 for topic, msg, t in bag.read_messages(topics=[tf_topic ,depth_topic, rgb_topic]):
@@ -102,15 +119,15 @@ for topic, msg, t in bag.read_messages(topics=[tf_topic ,depth_topic, rgb_topic]
             transmat = np.eye(4)
             transmat[:3, :3] = rot
             transmat[:3, 3] = translation
-            points_cf = np.matmul(transmat, points.T).T #points transformed to camera frame
 
-            for i in range(len(points_cf)):
-                point = points_cf[i]
-                if np.linalg.norm(point)>2.5:
-                    continue
-                u, v = cam.project3dToPixel(point[:3])
-                if 0 <= u <= cam.width and 0 <= v <= cam.height:
-                    table_seen[int(i/nr_of_tables)] = True
+            for i in range(len(hull_points)):
+                points_cf = np.matmul(transmat, hull_points[i].T).T #points transformed to camera frame
+                for point in points_cf:
+                    if np.linalg.norm(point)>2.5:
+                        continue
+                    u, v = cam.project3dToPixel(point[:3])
+                    if 0 <= u <= cam.width and 0 <= v <= cam.height:
+                        table_seen[i] = True
 
             for j in range(nr_of_tables):
                 
@@ -137,7 +154,7 @@ for topic, msg, t in bag.read_messages(topics=[tf_topic ,depth_topic, rgb_topic]
             for i in range(nr_of_tables):
                 if table_seen_prev[i]:
                     depth_txt_file = depth_txt_files[i]
-                    depth_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " - " + depth_img_name + "\n")
+                    depth_txt_file.write(str(table_occ[i]) + ' - ' + str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " - " + depth_img_name + "\n")
         depth_count += 1
     if topic==rgb_topic:
         if rgb_count % step_size == 0:
@@ -147,7 +164,7 @@ for topic, msg, t in bag.read_messages(topics=[tf_topic ,depth_topic, rgb_topic]
             for i in range(nr_of_tables):
                 if table_seen_prev[i]:
                     rgb_txt_file = rgb_txt_files[i]
-                    rgb_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " - " + rgb_img_name + "\n")
+                    rgb_txt_file.write(str(table_occ[i]) + ' - ' + str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " - " + rgb_img_name + "\n")
         rgb_count += 1
 
 
