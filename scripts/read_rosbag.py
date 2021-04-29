@@ -46,16 +46,13 @@ ci.distortion_model = cam_conf['distortion_model']
 cam = PinholeCameraModel()
 cam.fromCameraInfo(ci)
 
-depth_folder = rosbag_conf['depth_folder']
+data_folder = rosbag_conf['data_folder']
+depth_folder = os.path.join(data_folder,'depth')
 if not os.path.exists(depth_folder):
     os.makedirs(depth_folder)
-rgb_folder = rosbag_conf['rgb_folder']
+rgb_folder = os.path.join(data_folder, 'rgb')
 if not os.path.exists(rgb_folder):
     os.makedirs(rgb_folder)
-txt_folder = rosbag_conf['txt_folder']
-if not os.path.exists(txt_folder):
-    os.makedirs(txt_folder)
-
 
 depth_topic = rosbag_conf['depth_topic']
 rgb_topic = rosbag_conf['rgb_topic']
@@ -68,7 +65,6 @@ rgb_topic = check_topics(rgb_topic, topics)
 depth_topic = check_topics(depth_topic, topics)
 tf_topic = check_topics(tf_topic, topics)
 
-table_txt_file = open(txt_folder + "table.txt", "w")
 centers = []
 bbx_points = None
 msg_store = MessageStoreProxy()
@@ -76,14 +72,12 @@ nr_of_tables = len(msg_store.query(Table._type))
 i = 0
 hull_points = []
 for msg, meta in msg_store.query(Table._type):
-    table_txt_file.write(str(msg)+"\n")
     points = []
     for point in msg.points:
         points.append([point.x, point.y, point.z, 1.0])
     points = np.array(points)
     hull_points.append(points)
 points = np.array(bbx_points)
-table_txt_file.close()
 print('Points received')
 
 step_size = rosbag_conf['step_size']
@@ -93,15 +87,16 @@ rgb_count = 0
 tf_count = 0
 log = []
 
-log_txt_file = open(txt_folder + "log.txt", "w")
 depth_txt_files = []
 rgb_txt_files = []
-depth_folders = []
-rgb_folders = []
+table_folders = []
 for i in range(nr_of_tables):
-    depth_txt_files.append(open(txt_folder + "table_{}_".format(i) + "depth.txt", "w"))
-    rgb_txt_files.append(open(txt_folder + "table_{}_".format(i) + "rgb.txt", "w"))
-
+    table_folder = os.path.join(data_folder, "table_{}".format(i))
+    if not os.path.exists(table_folder):
+        os.makedirs(table_folder)
+    table_folders.append(table_folder)
+    depth_txt_files.append([])
+    rgb_txt_files.append([])
 
 table_seen = np.zeros(nr_of_tables, dtype=bool)
 table_seen_prev = np.zeros(nr_of_tables, dtype=bool)
@@ -130,18 +125,18 @@ for topic, msg, t in bag.read_messages(topics=[tf_topic ,depth_topic, rgb_topic]
                         table_seen[i] = True
 
             for j in range(nr_of_tables):
-                
-                if not table_seen_prev[j] and all(table_seen_list[:, j]):
-                    table_occ[j] +=1
+                if (not table_seen_prev[j]) and all(table_seen_list[:, j]):
                     log.append('Table {}, start at {}, occurance {}\n'.format(j, t.to_sec(), table_occ[j]))
-                    log_txt_file.write('Table {}, start at {}, occurance {}. Transform:\n'.format(j, t.to_sec(), table_occ[j]))
-                    log_txt_file.write("{:.9f}".format(t.to_sec()) + " - " + str(transmat) + "\n")
-
-                if table_seen_prev[j] and not any(table_seen_list[:, j]):
+                    depth_occ_filename = os.path.join(table_folders[j], "depth_{}.txt".format(table_occ[j]))
+                    depth_txt_files[j].append(open(depth_occ_filename, "w"))
+                    rgb_occ_filename = os.path.join(table_folders[j], "rgb_{}.txt".format(table_occ[j]))
+                    rgb_txt_files[j].append(open(rgb_occ_filename, "w"))
+                    table_occ[j] +=1
+                elif table_seen_prev[j] and not any(table_seen_list[:, j]):
                     log.append('Table {}, stop at {}, occurance {}\n'.format(j, t.to_sec(), table_occ[j]))
                 if all(table_seen_list[:, j]):
                     table_seen_prev[j] = True
-                if not any(table_seen_list[:, j]):
+                elif not any(table_seen_list[:, j]):
                     table_seen_prev[j] = False
             table_seen_list = np.roll(table_seen_list, -1, 0)
             table_seen_list[-1,:] = table_seen
@@ -150,27 +145,28 @@ for topic, msg, t in bag.read_messages(topics=[tf_topic ,depth_topic, rgb_topic]
         if depth_count % step_size == 0:
             depth_img_name = "depth%05i.png" % (depth_count/step_size)
             cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
-            cv2.imwrite(depth_folder + depth_img_name, cv_img)       
+            cv2.imwrite(os.path.join(depth_folder, depth_img_name), cv_img)       
             for i in range(nr_of_tables):
                 if table_seen_prev[i]:
-                    depth_txt_file = depth_txt_files[i]
-                    depth_txt_file.write(str(table_occ[i]) + ' - ' + str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " - " + depth_img_name + "\n")
+                    depth_txt_file = depth_txt_files[i][table_occ[i]-1]
+                    depth_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " depth/" + depth_img_name + "\n")
         depth_count += 1
     if topic==rgb_topic:
         if rgb_count % step_size == 0:
             rgb_img_name = "rgb%05i.png" % (rgb_count/step_size)
             cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
-            cv2.imwrite(rgb_folder + rgb_img_name, cv_img)
+            cv2.imwrite(os.path.join(rgb_folder, rgb_img_name), cv_img)
             for i in range(nr_of_tables):
                 if table_seen_prev[i]:
-                    rgb_txt_file = rgb_txt_files[i]
-                    rgb_txt_file.write(str(table_occ[i]) + ' - ' + str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " - " + rgb_img_name + "\n")
+                    rgb_txt_file = rgb_txt_files[i][table_occ[i]-1]
+                    rgb_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " rgb/" + rgb_img_name + "\n")
         rgb_count += 1
 
 
-for file in depth_txt_files:
-    file.close()
-for file in rgb_txt_files:
-    file.close()
-log_txt_file.close()
+for file_list in depth_txt_files:
+    for file in file_list:
+        file.close()
+for file_list in rgb_txt_files:
+    for file in file_list:
+        file.close()        
 print('Finished')

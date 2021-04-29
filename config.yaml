@@ -4,9 +4,7 @@ rosbag:
     depth_topic: '/hsrb/head_rgbd_sensor/depth_registered/image_rect_raw'
     rgb_topic: '/hsrb/head_rgbd_sensor/rgb/image_rect_color'
     tf_topic: '/tf'
-    depth_folder: '/home/v4r/data/depth/'
-    rgb_folder: '/home/v4r/data/rgb/'
-    txt_folder: '/home/v4r/data/txt/'
+    data_folder: '/home/v4r/data/'
     bag_file: '/home/v4r/data/2021-02-13-17-10-21.bag'
     table_txt_file: '/home/v4r/data/txt/table.txt'
 
