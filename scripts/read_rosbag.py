@@ -34,8 +34,12 @@ def check_topics(t, topics):
 print('Rosbag extraction node')
 rospack = rospkg.RosPack()
 path = rospack.get_path('table_extractor')
-with open(path+'/config.yaml', 'rb') as f:
-    conf = yaml.load(f.read())    # load the config file
+if os.path.exists('/home/v4r/data/table_extractor_config.yaml'):
+    with open('/home/v4r/data/table_extractor_config.yaml', 'rb') as f:
+        conf = yaml.load(f.read())    # load the config file
+else:
+    with open(path+'/config.yaml', 'rb') as f:
+        conf = yaml.load(f.read())    # load the config file
 rosbag_conf = conf['rosbag']
 cam_conf = conf['camera_info']
 ci = CameraInfo()

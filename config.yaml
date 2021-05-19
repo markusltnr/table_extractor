@@ -5,7 +5,7 @@ rosbag:
     rgb_topic: '/hsrb/head_rgbd_sensor/rgb/image_rect_color'
     tf_topic: '/tf'
     data_folder: '/home/v4r/data/'
-    bag_file: '/home/v4r/data/2021-02-13-17-10-21.bag'
+    bag_file: '/home/v4r/data/rosbag.bag'
     table_txt_file: '/home/v4r/data/txt/table.txt'
 
 table_viewpoint:
@@ -17,8 +17,7 @@ table_viewpoint:
 table_extractor:
     normals_thresh: 0.2 #used to filter out points that don't belong to horizontal planes. 
                         #If |x| or |y| of the normal is bigger than the threshold, the point is removed from the cloud. 
-    reconstruction_file: "/home/v4r/data/SashaRoom/test1/transformed_scene1_pred_legend_21.ply"
-    #reconstruction_file: "/home/markus/V4R/markus_ws/src/table_extractor/SashaRoom/test1/transformed_scene1_pred_legend_21.ply"
+    reconstruction_file: "/home/v4r/data/reconstruction.ply"
     downsample_vox_size: 0.02 # voxel size for downsampling
     remove_radius_outlier_nbpoints: 4 #12
     remove_radius_outlier_radius:  0.05 #0.1
