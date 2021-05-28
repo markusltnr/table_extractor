@@ -234,9 +234,9 @@ try:
 except rospy.ServiceException, e:
     print "Service call failed: %s" % e
 
-print('Planes extracted')
-for cloud_pub, i in zip(cloud_pubs, range(len(cloud_pubs))):
-    cloud_pub.publish(o3dToROS(h_planeclouds_clustered[i]))
-    #cloud_pub.publish(o3dToROS(clouds[i]))
+# print('Planes extracted')
+# for cloud_pub, i in zip(cloud_pubs, range(len(cloud_pubs))):
+#     cloud_pub.publish(o3dToROS(h_planeclouds_clustered[i]))
+#     #cloud_pub.publish(o3dToROS(clouds[i]))
 
-rospy.spin()
+# rospy.spin()
