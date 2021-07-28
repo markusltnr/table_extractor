@@ -111,6 +111,6 @@ class RegionGrowing:
                 sq_idx = sq_idx + 1
                 
         plane_expanded = scene.select_down_sample(orig_object_ind)
-        plane_expanded.paint_uniform_color([1,0,0])
+        #plane_expanded.paint_uniform_color([1,0,0])
         #o3d.visualization.draw_geometries([scene, plane_expanded])
         return plane_expanded

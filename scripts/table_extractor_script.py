@@ -82,6 +82,13 @@ def o3dToROS(open3d_cloud, frame_id="map"):
     # create ros_cloud
     return pc2.create_cloud(header, fields, cloud_data)
 
+def get_labels_from_colors(pcd, class_labels, colors):
+    color_labels = -np.ones((np.asarray(pcd.colors).shape[0])).astype(np.int64)
+    for point, i in zip(np.asarray(pcd.colors), range(len(pcd.colors))):
+        for label in class_labels:
+            if all(np.isclose(point, colors[label])):
+                color_labels[i] = label
+    return color_labels
 rospy.init_node('table_extractor')
 msg_store = MessageStoreProxy()
 
@@ -107,11 +114,13 @@ pcd = pcd.select_down_sample(np.where((abs(normals[:, 0]) < normals_thresh)
 scene = pcd
 
 #select only points from certain class labels by color
-color = -np.ones((np.asarray(pcd.colors).shape[0]))
-for point, i in zip(np.asarray(pcd.colors), range(len(pcd.colors))):
-    for label in class_labels:
-        if all(np.isclose(point, colors[label])):
-            color[i] = label
+color = get_labels_from_colors(pcd, class_labels, colors)
+print(color)
+# -np.ones((np.asarray(pcd.colors).shape[0]))
+# for point, i in zip(np.asarray(pcd.colors), range(len(pcd.colors))):
+#     for label in class_labels:
+#         if all(np.isclose(point, colors[label])):
+#             color[i] = label
 index_interest = np.where(color > 0)[0]
 pcd = pcd.select_down_sample(index_interest)
 
@@ -167,12 +176,16 @@ for planecloud, plane in zip(h_plane_clouds, h_planes):
             #publishing clouds
             cloud_pub = rospy.Publisher(
                 '/cloud'+str(i+1), PointCloud2, queue_size=10, latch=True)
-            cloud = cloud.paint_uniform_color(colors[i])
+            #cloud = cloud.paint_uniform_color(colors[i])
+            o3d.io.write_point_cloud('/home/v4r/data/cloud'+str(i+1)+'.pcd', cloud)
             #remove already selected points from cloud
             for d in cluster_idx[0]:
                 pcd.points[d] = np.array(
                     [np.nan, np.nan, np.nan], dtype=np.float64).reshape(3, 1)
-
+            color_labels = get_labels_from_colors(cloud, class_labels, colors)
+            ### TODO
+            unique, counts = np.unique(color_labels, return_counts=True)
+            print('most: ', unique, counts)          
             h_planeclouds_clustered.append(cloud)
             cloud_pubs.append(cloud_pub)
             #save tables in mongodb
@@ -180,14 +193,18 @@ for planecloud, plane in zip(h_plane_clouds, h_planes):
             hull, indx = cloud.compute_convex_hull()
             points = np.asarray(hull.vertices)
             center = hull.get_center()
-            table.center.x = center[0]
-            table.center.y = center[1]
-            table.center.z = center[2]
+            table.center.point.x = center[0]
+            table.center.point.y = center[1]
+            table.center.point.z = center[2]
+            table.center.header.frame_id = 'map'
             table.plane = plane
             table_points = []
             for point in points:
-                table_points.append(ros_numpy.msgify(
-                geometry_msgs.msg.Point, point.astype(np.float32)))
+                pointstamped = geometry_msgs.msg.PointStamped()
+                pointstamped.point = ros_numpy.msgify(geometry_msgs.msg.Point, point.astype(np.float32))
+                pointstamped.header.frame_id = 'map'
+                table_points.append(pointstamped)
+                #table_points.append(ros_numpy.msgify(geometry_msgs.msg.Point, point.astype(np.float32)))
             table.points = table_points
             z = np.mean(points[:, 2])
             table.height = float(z)
@@ -239,4 +256,4 @@ except rospy.ServiceException, e:
 #     cloud_pub.publish(o3dToROS(h_planeclouds_clustered[i]))
 #     #cloud_pub.publish(o3dToROS(clouds[i]))
 
-# rospy.spin()
+rospy.spin()

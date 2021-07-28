@@ -277,7 +277,7 @@ class TableViewpoint:
                         node_name = 'Table_{}_Viewpoint_{}'.format(table_number, self.table_viewpoint_counter)
                         ## print node_name 
                         #if self.table_viewpoint_counter <= 1:  # for this demo we only save one viewpoint of each table
-    #                    self.write_patrolling_cfg_file(heights[table_number-1], table_number, pose_st)
+                        self.write_patrolling_cfg_file(heights[table_number-1], table_number, pose_st)
                         self.draw_marker_rviz_posest(pose_st)
                         self.table_viewpoint_counter += 1
                         self.previous_table_nr = table_number
@@ -393,6 +393,7 @@ if __name__ == '__main__':
     try:
         viewpoint = TableViewpoint()
         viewpoint.run()
+        rospy.spin()
 
     except rospy.ROSInterruptException:
         pass
