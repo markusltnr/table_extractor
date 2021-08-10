@@ -26,6 +26,7 @@ ext_conf = conf['table_extractor']
 colors = np.array(ext_conf['colors'], dtype=np.float32)/255
 normals_thresh = ext_conf['normals_thresh']
 class_labels = ext_conf['class_labels']
+class_names = ext_conf['class_names']
 reconstruction_file = ext_conf['reconstruction_file']
 dwn_vox = ext_conf['downsample_vox_size']
 nbpoints = ext_conf['remove_radius_outlier_nbpoints']
@@ -184,8 +185,10 @@ for planecloud, plane in zip(h_plane_clouds, h_planes):
                     [np.nan, np.nan, np.nan], dtype=np.float64).reshape(3, 1)
             color_labels = get_labels_from_colors(cloud, class_labels, colors)
             ### TODO
+            #find out which class the plane belongs to
             unique, counts = np.unique(color_labels, return_counts=True)
-            print('most: ', unique, counts)          
+            counts_idx = np.where(counts == np.amax(counts))
+            class_name = class_names[np.where(class_labels == unique[counts_idx][0])[0][0]]
             h_planeclouds_clustered.append(cloud)
             cloud_pubs.append(cloud_pub)
             #save tables in mongodb
@@ -193,6 +196,8 @@ for planecloud, plane in zip(h_plane_clouds, h_planes):
             hull, indx = cloud.compute_convex_hull()
             points = np.asarray(hull.vertices)
             center = hull.get_center()
+            table.id = i 
+            table.category = class_name
             table.center.point.x = center[0]
             table.center.point.y = center[1]
             table.center.point.z = center[2]
@@ -250,6 +255,7 @@ try:
     p_id = msg_store.update_named('table_map', table_map, upsert=True)
 except rospy.ServiceException, e:
     print "Service call failed: %s" % e
+print('Table Extractor script finished.')
 
 # print('Planes extracted')
 # for cloud_pub, i in zip(cloud_pubs, range(len(cloud_pubs))):
