@@ -9,8 +9,8 @@ rosbag:
     table_txt_file: '/home/v4r/data/txt/table.txt'
 
 table_viewpoint:
-    contour_approx_param: 0.15
-    viewpoint_edge_dist: 0.2 #viewpoint will be created 20cm away from table edge
+    contour_approx_param: 0.1
+    viewpoint_edge_dist: 0.3 #viewpoint will be created 20cm away from table edge
     viewpoint_dist_param: 0.4
     check_plan: False
 
@@ -30,7 +30,9 @@ table_extractor:
     map_deltay: 8.0
     map_resolution: 0.03
     class_labels: [2,3,5,6,9,11,13,14,31,37,38]
-    class_names: ['cabinet', 'bed', 'sofa', 'table', 'bookshelf','counter', 'desk', 'shelves', 'night stand', 'otherstructure', 'otherfurn'] 
+    class_names: ['cabinet', 'bed', 'sofa', 'table', 
+        'bookshelf','counter', 'desk', 'shelves', 
+        'night stand', 'otherstructure', 'otherfurn'] 
     colors: [[190, 153, 112],  # wall 0
     [189, 198, 255],  # floor 1
     [213, 255, 0],  # cabinet 2

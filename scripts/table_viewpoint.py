@@ -25,6 +25,10 @@ from tmc_navigation_msgs.msg import BaseLocalPlannerStatus
 from mongodb_store.message_store import MessageStoreProxy
 from table_extractor.msg import Table 
 import ros_numpy
+import open3d as o3d
+
+
+
 
 map_frame = 'map'
 
@@ -67,6 +71,22 @@ class TableViewpoint:
         self.res = ext_conf['map_resolution']
         self.height = ext_conf['map_height']
         self.width = ext_conf['map_width']
+        self.colors = np.array(ext_conf['colors'], dtype=np.float32)/255
+        self.class_labels = ext_conf['class_labels']
+        dwn_vox = ext_conf['downsample_vox_size']
+        reconstruction_file = ext_conf['reconstruction_file']
+        pcd = o3d.io.read_point_cloud(reconstruction_file)
+        pcd = pcd.voxel_down_sample(voxel_size=2*dwn_vox)
+        
+        # remove floor
+        floor_indices = []
+        for cpoint, i in zip(np.asarray(pcd.colors), range(len(pcd.colors))):
+            if all(np.isclose(cpoint, self.colors[1])):
+                floor_indices.append(i)
+        pcd = pcd.select_down_sample(floor_indices, invert=True)
+        self.pcd_tree = o3d.geometry.KDTreeFlann(pcd)
+
+
 
     def path_status_cb(self, data):
         if data.status is 0: # kNone (uint32):0 - No goal is received and waiting.
@@ -94,9 +114,10 @@ class TableViewpoint:
             p = point_1 + (i + 1) * vector / (number_pts + 1) + vector_n * self.edge_dist
             x = p[0]
             y = p[1]
-            viewpose = self.transform_to_pose_st((x,y), yaw)   
-            self.draw_marker_rviz_posest(viewpose)
-            viewposes.append(viewpose)
+            viewpose = self.transform_to_pose_st((x,y), yaw)
+            if self.is_viewpose_free(viewpose):
+                self.draw_marker_rviz_posest(viewpose)
+                viewposes.append(viewpose)
 
         return viewposes
 
@@ -305,6 +326,27 @@ class TableViewpoint:
         pose_st.pose.orientation.z = q[2]
         pose_st.pose.orientation.w = q[3]
         return pose_st
+
+    def is_viewpose_free(self, viewpose):
+        """
+        receives a viewpose (PoseStamped) and checks if the space around it is free in the reconstruction
+        """
+        #TODO check different heights, use parameter instead of hardcoded values
+        point1 = [viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z]
+        point2 = [viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z+0.15]
+        point3 = [viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z+0.3]
+        point4 = [viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z+0.45]
+        point5 = [viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z+0.6]
+        [k1, idx, _] = self.pcd_tree.search_radius_vector_3d(point1, 0.2)
+        [k2, idx, _] = self.pcd_tree.search_radius_vector_3d(point2, 0.2)
+        [k3, idx, _] = self.pcd_tree.search_radius_vector_3d(point3, 0.2)
+        [k4, idx, _] = self.pcd_tree.search_radius_vector_3d(point4, 0.2)
+        [k5, idx, _] = self.pcd_tree.search_radius_vector_3d(point5, 0.2)
+        k = k1+k2+k3+k4+k5
+        if k>0:
+            return False
+        else:
+            return True
 
     def check_plan(self, pose_st):
         """
