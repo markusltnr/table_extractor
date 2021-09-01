@@ -10,7 +10,7 @@ rosbag:
 
 table_viewpoint:
     contour_approx_param: 0.1
-    viewpoint_edge_dist: 0.3 #viewpoint will be created 20cm away from table edge
+    viewpoint_edge_dist: 0.55 #viewpoint will be created 20cm away from table edge
     viewpoint_dist_param: 0.4
     check_plan: False
 
@@ -23,7 +23,7 @@ table_extractor:
     remove_radius_outlier_radius:  0.05 #0.1
     cluster_dbscan_eps: 0.2 #0.05 # 0.1 # Density parameter that is used to find neighbouring points.
     cluster_dbscan_minpoints: 10 #20 Minimum number of points to form a cluster.
-    min_cluster_size_param: 0.03 # minimum 1% of pointcloud have to be in plane 
+    min_cluster_size_param: 0.015 # minimum 1% of pointcloud have to be in plane 
     map_height: 500
     map_width: 500
     map_deltax: 10.0

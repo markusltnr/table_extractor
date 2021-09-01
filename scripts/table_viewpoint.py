@@ -83,8 +83,11 @@ class TableViewpoint:
         for cpoint, i in zip(np.asarray(pcd.colors), range(len(pcd.colors))):
             if all(np.isclose(cpoint, self.colors[1])):
                 floor_indices.append(i)
+        floor_pcd = pcd.select_down_sample(floor_indices, invert=False)
+        self.floor_pcd_tree = o3d.geometry.KDTreeFlann(floor_pcd)
         pcd = pcd.select_down_sample(floor_indices, invert=True)
         self.pcd_tree = o3d.geometry.KDTreeFlann(pcd)
+        
 
 
 
@@ -115,7 +118,7 @@ class TableViewpoint:
             x = p[0]
             y = p[1]
             viewpose = self.transform_to_pose_st((x,y), yaw)
-            if self.is_viewpose_free(viewpose):
+            if self.is_viewpose_free(viewpose) and self.is_viewpose_on_map(viewpose):
                 self.draw_marker_rviz_posest(viewpose)
                 viewposes.append(viewpose)
 
@@ -331,22 +334,26 @@ class TableViewpoint:
         """
         receives a viewpose (PoseStamped) and checks if the space around it is free in the reconstruction
         """
-        #TODO check different heights, use parameter instead of hardcoded values
-        point1 = [viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z]
-        point2 = [viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z+0.15]
-        point3 = [viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z+0.3]
-        point4 = [viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z+0.45]
-        point5 = [viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z+0.6]
-        [k1, idx, _] = self.pcd_tree.search_radius_vector_3d(point1, 0.2)
-        [k2, idx, _] = self.pcd_tree.search_radius_vector_3d(point2, 0.2)
-        [k3, idx, _] = self.pcd_tree.search_radius_vector_3d(point3, 0.2)
-        [k4, idx, _] = self.pcd_tree.search_radius_vector_3d(point4, 0.2)
-        [k5, idx, _] = self.pcd_tree.search_radius_vector_3d(point5, 0.2)
-        k = k1+k2+k3+k4+k5
+        for height in np.arange(0, 2, 0.15):
+            print(height)
+            point =[viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z+height]
+            [k, idx, _] = self.pcd_tree.search_radius_vector_3d(point, 0.2)
+            if k>0:
+                return False
+        
+        return True
+
+    def is_viewpose_on_map(self, viewpose):
+        """
+        receives a viewpose (PoseStamped) and checks if the space around it contains floor points from the reconstruction. 
+        We discard poses that are not near the floor, since the robot didn't look at these areas in the reconstruction step.
+        """
+        point =[viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z]
+        [k, idx, _] = self.floor_pcd_tree.search_radius_vector_3d(point, 0.1)
         if k>0:
-            return False
-        else:
             return True
+        else:
+            return False
 
     def check_plan(self, pose_st):
         """
