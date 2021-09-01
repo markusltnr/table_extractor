@@ -9,8 +9,8 @@ rosbag:
     table_txt_file: '/home/v4r/data/txt/table.txt'
 
 table_viewpoint:
-    contour_approx_param: 0.035
-    viewpoint_edge_dist: 0.2 #viewpoint will be created 20cm away from table edge
+    contour_approx_param: 0.1
+    viewpoint_edge_dist: 0.55 #viewpoint will be created 20cm away from table edge
     viewpoint_dist_param: 0.4
     check_plan: False
 
@@ -23,53 +23,56 @@ table_extractor:
     remove_radius_outlier_radius:  0.05 #0.1
     cluster_dbscan_eps: 0.2 #0.05 # 0.1 # Density parameter that is used to find neighbouring points.
     cluster_dbscan_minpoints: 10 #20 Minimum number of points to form a cluster.
-    min_cluster_size_param: 0.03 # minimum 1% of pointcloud have to be in plane 
+    min_cluster_size_param: 0.015 # minimum 1% of pointcloud have to be in plane 
     map_height: 500
     map_width: 500
-    map_deltax: 4.0
-    map_deltay: 7.0
+    map_deltax: 10.0
+    map_deltay: 8.0
     map_resolution: 0.03
-    class_labels: [2,3,5,6,9,11,13,14,31,37,38] 
-    colors: [[190, 153, 112],  # wall
-    [189, 198, 255],  # floor
-    [213, 255, 0],  # cabinet
-    [158, 0, 142],  # bed
-    [152, 255, 82],  # chair
-    [119, 77, 0],  # sofa
-    [122, 71, 130],  # table
-    [0, 174, 126],  # door
-    [0, 125, 181],  # window
-    [0, 143, 156],  # bookshelf
-    [107, 104, 130],  # picture
-    [255, 229, 2],  # counter
-    [117, 68, 177],  # blinds
-    [1, 255, 254],  # desk
-    [0, 21, 68],  # shelves
-    [255, 166, 254],  # curtain
-    [194, 140, 159],  # dresser
-    [98, 14, 0],  # pillow
-    [0, 71, 84],  # mirror
-    [255, 219, 102],  # floor mat
-    [0, 118, 255],  # clothes
-    [67, 0, 44],  # ceiling
-    [1, 208, 255],  # books
-    [232, 94, 190],  # refrigerator
-    [145, 208, 203],  # television
-    [255, 147, 126],  # paper
-    [95, 173, 78],  # towel
-    [0, 100, 1],  # shower curtain
-    [255, 238, 232],  # box
-    [0, 155, 255],  # whiteboard
-    [255, 0, 86],  # person
-    [189, 211, 147],  # night stand
-    [133, 169, 0],  # toilet
-    [149, 0, 58],  # sink
-    [255, 2, 157],  # lamp
-    [187, 136, 0],  # bathtub
-    [0, 185, 23],  # bag
-    [1, 0, 103],  # otherstructure
-    [0, 0, 255],  # otherfurn
-    [255, 0, 246]] # otherprop
+    class_labels: [2,3,5,6,9,11,13,14,31,37,38]
+    class_names: ['cabinet', 'bed', 'sofa', 'table', 
+        'bookshelf','counter', 'desk', 'shelves', 
+        'night stand', 'otherstructure', 'otherfurn'] 
+    colors: [[190, 153, 112],  # wall 0
+    [189, 198, 255],  # floor 1
+    [213, 255, 0],  # cabinet 2
+    [158, 0, 142],  # bed 3
+    [152, 255, 82],  # chair 4
+    [119, 77, 0],  # sofa 5
+    [122, 71, 130],  # table 6
+    [0, 174, 126],  # door 7
+    [0, 125, 181],  # window 8
+    [0, 143, 156],  # bookshelf 9
+    [107, 104, 130],  # picture 10
+    [255, 229, 2],  # counter 11
+    [117, 68, 177],  # blinds 12
+    [1, 255, 254],  # desk 13
+    [0, 21, 68],  # shelves 14
+    [255, 166, 254],  # curtain 15
+    [194, 140, 159],  # dresser 16
+    [98, 14, 0],  # pillow 17
+    [0, 71, 84],  # mirror 18
+    [255, 219, 102],  # floor mat 19
+    [0, 118, 255],  # clothes 20
+    [67, 0, 44],  # ceiling 21
+    [1, 208, 255],  # books 22
+    [232, 94, 190],  # refrigerator 23
+    [145, 208, 203],  # television 24
+    [255, 147, 126],  # paper 25
+    [95, 173, 78],  # towel 26
+    [0, 100, 1],  # shower curtain 27
+    [255, 238, 232],  # box 28
+    [0, 155, 255],  # whiteboard 29
+    [255, 0, 86],  # person 30
+    [189, 211, 147],  # night stand 31
+    [133, 169, 0],  # toilet 32 
+    [149, 0, 58],  # sink 33
+    [255, 2, 157],  # lamp 34
+    [187, 136, 0],  # bathtub 35
+    [0, 185, 23],  # bag 36
+    [1, 0, 103],  # otherstructure 37
+    [0, 0, 255],  # otherfurn 38
+    [255, 0, 246]] # otherprop 39
 
 camera_info:
     header: 

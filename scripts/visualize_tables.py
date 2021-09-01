@@ -49,18 +49,21 @@ for msg, meta in msg_store.query(Table._type):
     name.header.frame_id = '/map'
     name.type = 9 #TEXT_VIEW_FACING=9
     name.id = table_nr
-    name.pose.position = msg.center
-    name.pose.position.z = msg.center.z + 0.2
-    name.text = 'Table {}'.format(table_nr)
+    name.pose.position = msg.center.point
+    print(msg.id)
+    print(msg.category)
+    #print(msg.viewposes)
+    name.pose.position.z = msg.center.point.z + 0.2
+    name.text = '{}_{}'.format(msg.category, msg.id)
     name.color.a = 1.0
     name.color.r = 1.0
     name.color.g = 1.0
     name.color.b = 1.0
-    name.scale.z = 0.1
+    name.scale.z = 0.15
     names_list.append(name)
 
     for point in msg.points:
-        points.append([point.x, point.y, point.z])
+        points.append([point.point.x, point.point.y, point.point.z])
     bbx = o3d.geometry.AxisAlignedBoundingBox.create_from_points(o3d.utility.Vector3dVector(points))
     box_points = np.asarray(bbx.get_box_points())
     box_points_ros = []
@@ -70,7 +73,7 @@ for msg, meta in msg_store.query(Table._type):
     bbx.header.frame_id = '/map'
     bbx.type = 4
     bbx.id = table_nr
-    bbx.points = msg.points
+    bbx.points = [x.point for x in msg.points]
     bbx.pose.orientation.w = 1.0
     bbx.color.a = 1.0
     bbx.color.r = colors[table_nr][0]

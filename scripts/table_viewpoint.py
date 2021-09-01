@@ -10,6 +10,8 @@ import rospkg
 import yaml
 import os
 import actionlib
+from scipy.spatial import ConvexHull
+from skimage.measure import approximate_polygon
 
 from actionlib_msgs.msg import GoalStatus, GoalStatusArray, GoalID
 from geometry_msgs.msg import Point, PoseStamped, Quaternion
@@ -20,17 +22,14 @@ from nav_msgs.srv import GetPlan
 from std_msgs.msg import Time
 from tmc_navigation_msgs.msg import BaseLocalPlannerStatus
 
-import mongodb_store_msgs.srv as dc_srv
-import mongodb_store.util as dc_util
 from mongodb_store.message_store import MessageStoreProxy
-from table_mapping.msg import Table 
-from primitect_msgs.msg import Table as PrimTable
-import pymongo
+from table_extractor.msg import Table 
 import ros_numpy
+import open3d as o3d
 
 
-map_topic = '/static_distance_map_ref'
-map_topic = '/table_map'
+
+
 map_frame = 'map'
 
 class TableViewpoint:
@@ -39,7 +38,6 @@ class TableViewpoint:
         self.previous_table_nr = 1
 
         self.map = None
-        #self.map_sub = rospy.Subscriber(map_topic, nav_msgs.msg.OccupancyGrid, self.map_cb)
 
         self.move_client = actionlib.SimpleActionClient('/move_base/move', MoveBaseAction)
 
@@ -51,21 +49,9 @@ class TableViewpoint:
         self.marker_id = 0
         self.markers = MarkerArray()
 
-        #self.map_image_path = os.path.join(rospkg.RosPack().get_path('table_mapping'), 'map')
-        #self.map_image_file = os.path.join(self.map_image_path, 'table_map.pgm')
-        #self.map_image_file = '/home/markus/V4R/markus_ws/src/table_extractor/table_map.pgm'
-        self.cfg_path = os.path.join(rospkg.RosPack().get_path('table_mapping'), 'conf')
-        self.cfg_file = os.path.join(self.cfg_path, 'patrolling.yaml')
-
         self.marker_pub = rospy.Publisher('table_viewpoint_markers', MarkerArray, queue_size=10, latch=True)
-        
-        str = []
-        writefile = open(self.cfg_file, 'w')
-        yaml.dump(str, writefile)
-        writefile.close()
 
         self.msg_store = MessageStoreProxy()
-        self.map_load()
 
         rospack = rospkg.RosPack()
         path = rospack.get_path('table_extractor')
@@ -77,67 +63,66 @@ class TableViewpoint:
         self.contour_approx_param = vp_conf['contour_approx_param']
         self.edge_dist = vp_conf['viewpoint_edge_dist']
         self.dist_param = vp_conf['viewpoint_dist_param']
+        rospack = rospkg.RosPack()
 
-    def map_cb(self, data):
-        self.map = data
-    def map_load(self):
-        msg, meta = self.msg_store.query_named('table_map', OccupancyGrid._type)
-        self.map = msg
-    
+        ext_conf = conf['table_extractor']
+        self.delta_x = ext_conf['map_deltax']
+        self.delta_y = ext_conf['map_deltay']
+        self.res = ext_conf['map_resolution']
+        self.height = ext_conf['map_height']
+        self.width = ext_conf['map_width']
+        self.colors = np.array(ext_conf['colors'], dtype=np.float32)/255
+        self.class_labels = ext_conf['class_labels']
+        dwn_vox = ext_conf['downsample_vox_size']
+        reconstruction_file = ext_conf['reconstruction_file']
+        pcd = o3d.io.read_point_cloud(reconstruction_file)
+        pcd = pcd.voxel_down_sample(voxel_size=2*dwn_vox)
+        
+        # remove floor
+        floor_indices = []
+        for cpoint, i in zip(np.asarray(pcd.colors), range(len(pcd.colors))):
+            if all(np.isclose(cpoint, self.colors[1])):
+                floor_indices.append(i)
+        floor_pcd = pcd.select_down_sample(floor_indices, invert=False)
+        self.floor_pcd_tree = o3d.geometry.KDTreeFlann(floor_pcd)
+        pcd = pcd.select_down_sample(floor_indices, invert=True)
+        self.pcd_tree = o3d.geometry.KDTreeFlann(pcd)
+        
+
+
+
     def path_status_cb(self, data):
         if data.status is 0: # kNone (uint32):0 - No goal is received and waiting.
             self.path_status_received = False
         else:
             self.path_status = data
             self.path_status_received = True
-        
-    def pixel_to_pose(self,x,y):
-        #rospy.wait_for_message(map_topic, nav_msgs.msg.OccupancyGrid, timeout=10)
-        pose_x = x * self.map.info.resolution + self.map.info.origin.position.x
-        pose_y = y * self.map.info.resolution + self.map.info.origin.position.y
-        return pose_x, pose_y
 
-    def calculate_viewpoint(self, point_1, point_2):
+    def calculate_viewposes(self, point_1, point_2):
         """
             takes two points and calculates the distance between them, and a viewpoint by using the normal vector
             the viewpoint is at a fixed distance to the center of the two points.
             :returns length, (x,y), yaw
         """
 
-        #table_edge_dist = 0.2 #viewpoint will be created 20cm away from table edge
-        #pt_dist_param = 0.8 #theres a point at least every 80cm
-        
         center_of_line = (point_1 + point_2) / 2
         vector = point_2 - point_1
         length = np.linalg.norm(vector)
-        number_pts = int(round(length * self.map.info.resolution / self.dist_param))
-        print(number_pts)
-        vector_n = (-vector[0][1], vector[0][0]) / length
-        
-        # p = center_of_line + vector_n * table_edge_dist / self.map.info.resolution
-        # x = int(round(p[0][0]))
-        # y = int(round(p[0][1]))
-        px_pts = []
-
-        for i in range(number_pts):
-            p = point_1 + (i + 1) * vector / (number_pts + 1) + vector_n * self.edge_dist / self.map.info.resolution
-            x = int(round(p[0][0]))
-            y = int(round(p[0][1]))
-            px_pts.append((x,y))
-
-        # p1 = point_1 + vector/8 + vector_n * table_edge_dist / self.map.info.resolution
-        # x1 = int(round(p1[0][0]))
-        # y1 = int(round(p1[0][1]))
-        # p2 = point_1 + 2*vector/8 + vector_n * table_edge_dist / self.map.info.resolution
-        # x2 = int(round(p2[0][0]))
-        # y2 = int(round(p2[0][1]))
-
+        number_pts = int(round(length/self.dist_param))
+        vector_n = (vector[1], -vector[0]) / length
         yaw = 3.14 + np.arctan2(vector_n[1], np.dot(vector_n, (1, 0)))
-        
-        print(px_pts)
 
+        viewposes = []
+        for i in range(number_pts):
+            p = point_1 + (i + 1) * vector / (number_pts + 1) + vector_n * self.edge_dist
+            x = p[0]
+            y = p[1]
+            viewpose = self.transform_to_pose_st((x,y), yaw)
+            if self.is_viewpose_free(viewpose) and self.is_viewpose_on_map(viewpose):
+                self.draw_marker_rviz_posest(viewpose)
+                viewposes.append(viewpose)
 
-        return length, px_pts, yaw
+        return viewposes
 
     def draw_marker_rviz_posest(self, pose_st):
         """
@@ -170,7 +155,43 @@ class TableViewpoint:
         self.markers.markers.append(marker)
         self.marker_pub.publish(self.markers)
 
+    # get viewpoints from table messages in database
     def search_for_viewpoint(self):
+        img = np.zeros([self.height, self.width, 1], dtype=np.int8)
+
+        for msg, meta in self.msg_store.query(Table._type):
+            points = []
+            print('#{}: {}'.format(msg.id, msg.category))
+            # convert 3D hull points to numpy and format them
+            for point in msg.points:
+                point = ros_numpy.numpify(point.point)
+                points.append(point)
+            points = np.asarray(points)
+            points = np.delete(points, 2, 1)
+            
+            # get 2D hull of those points and approximate the contour
+            hull = ConvexHull(points)
+            hull_points = points[hull.vertices]    
+            points = approximate_polygon(points[hull.vertices], self.contour_approx_param)
+
+            # iterate through all the edges of the contour and calculate the viewpoints from those 
+            viewposes = []
+            for j in range(len(points) - 1):    
+                # calculate lenght of the table edge, position and orientation of the viewpoint 
+                viewposes_line = self.calculate_viewposes(points[j], points[j + 1])
+                viewposes.extend(viewposes_line)
+                # last edge is between last and first point
+                if j == (len(points) - 2):
+                    viewposes_line = self.calculate_viewposes(points[j + 1], points[0])
+                    viewposes.extend(viewposes_line)
+            #### sort the saved viewpoints, from highest tablenr to lowest, from longest edge to lowest (Viewpoint_1 is longest edge)
+            msg.viewposes = viewposes
+            print(viewposes)
+            self.msg_store.update_id(meta['_id'], msg)
+
+
+    # get viewpoints from table map (old, delete when newer method works)
+    def search_for_viewpoint_old(self):
         area_limit = 0#100
         #rospy.wait_for_message(map_topic, nav_msgs.msg.OccupancyGrid, timeout=10)
         image = ros_numpy.numpify(self.map).astype(np.uint8)
@@ -277,7 +298,7 @@ class TableViewpoint:
                         node_name = 'Table_{}_Viewpoint_{}'.format(table_number, self.table_viewpoint_counter)
                         ## print node_name 
                         #if self.table_viewpoint_counter <= 1:  # for this demo we only save one viewpoint of each table
-    #                    self.write_patrolling_cfg_file(heights[table_number-1], table_number, pose_st)
+                        self.write_patrolling_cfg_file(heights[table_number-1], table_number, pose_st)
                         self.draw_marker_rviz_posest(pose_st)
                         self.table_viewpoint_counter += 1
                         self.previous_table_nr = table_number
@@ -299,15 +320,40 @@ class TableViewpoint:
         pose_st = PoseStamped()
         pose_st.header.frame_id = map_frame
         pose_st.header.stamp = rospy.Time.now()
-        pose_x, pose_y = self.pixel_to_pose(pt[0], pt[1])
-        pose_st.pose.position.x = pose_x
-        pose_st.pose.position.y = pose_y
+        #pose_x, pose_y = self.pixel_to_pose(pt[0], pt[1])
+        pose_st.pose.position.x = pt[0]
+        pose_st.pose.position.y = pt[1]
         q = tf.transformations.quaternion_from_euler(0, 0, yaw)
         pose_st.pose.orientation.x = q[0]
         pose_st.pose.orientation.y = q[1]
         pose_st.pose.orientation.z = q[2]
         pose_st.pose.orientation.w = q[3]
         return pose_st
+
+    def is_viewpose_free(self, viewpose):
+        """
+        receives a viewpose (PoseStamped) and checks if the space around it is free in the reconstruction
+        """
+        for height in np.arange(0, 2, 0.15):
+            print(height)
+            point =[viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z+height]
+            [k, idx, _] = self.pcd_tree.search_radius_vector_3d(point, 0.2)
+            if k>0:
+                return False
+        
+        return True
+
+    def is_viewpose_on_map(self, viewpose):
+        """
+        receives a viewpose (PoseStamped) and checks if the space around it contains floor points from the reconstruction. 
+        We discard poses that are not near the floor, since the robot didn't look at these areas in the reconstruction step.
+        """
+        point =[viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z]
+        [k, idx, _] = self.floor_pcd_tree.search_radius_vector_3d(point, 0.1)
+        if k>0:
+            return True
+        else:
+            return False
 
     def check_plan(self, pose_st):
         """
@@ -334,65 +380,14 @@ class TableViewpoint:
                 #https://docs.hsr.io/manual_en/reference/packages/tmc_navigation_msgs/PKGDOC.html#message-tmc_navigation_msgs/BaseLocalPlannerStatus
                 return False
 
-    def write_patrolling_cfg_file(self, height, table_number, pose_st):
-        """
-        append the table_number, time and pose to a config file at the location of self.cfg_file
-        """
-
-        readfile = open(self.cfg_file, 'r')
-        str = yaml.load(readfile)
-        readfile.close()
-        if str is None:
-            str = []
-        str.append(('Table_{}_Viewpoint_{}'.format(table_number, self.table_viewpoint_counter), height, pose_st.pose))
-        writefile = open(self.cfg_file, 'w')
-        yaml.dump(str, writefile)
-        writefile.close()
-
-    def store_mongodb(self, dic):
-        connection = pymongo.MongoClient('localhost', 62345) #Connect to mongodb
-
-        db = connection['message_store']        
-        collection = db['message_store']
-        collection.delete_many({"_meta.stored_type":"table_mapping/Table"})
-        cursor = collection.find({})
-        #for document in cursor:
-            #print(document)        
- 
-        for i in range(len(dic)):
-            try:
-                p_id = self.msg_store.update_named('table_{}'.format(dic[i].table_number), dic[i], upsert=True)
-            except rospy.ServiceException, e:
-                print "Service call failed: %s"%e
-
-
-    def run(self):
-        self.search_for_viewpoint()
-        rospy.loginfo('finished viewpoint creation')
-        #print self.cfg_file
-        #readfile = open(self.cfg_file, 'r')
-        #str = yaml.load(readfile)
-        #readfile.close()
-        
-        ##for i in range(len(str)):
-        ##    if  str[i][2].position.x > 0 and str[i][2].position.y>0:
-        ##        move_goal = MoveBaseGoal()
-        ##        move_goal.target_pose.header.frame_id='map'
-        ##        move_goal.target_pose.pose = str[i][2]
-        ##        print "moved to {}".format(str[i][0])
-        ##        self.move_client.wait_for_server()
-        ##        self.move_client.send_goal(move_goal)
-        ##        self.move_client.wait_for_result()
-
-
-
-
 
 if __name__ == '__main__':
     rospy.init_node('table_viewpoint')
     try:
         viewpoint = TableViewpoint()
-        viewpoint.run()
+        viewpoint.search_for_viewpoint()
+        print('Finished table_viewpoint script')
+        rospy.spin()
 
     except rospy.ROSInterruptException:
         pass
