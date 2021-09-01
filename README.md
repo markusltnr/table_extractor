@@ -1,6 +1,6 @@
 # Table Extractor
 
-Finds areas of interest (horizontal planes, e.g. tables) in a semantically segmented reconstruction of the room. Those areas are saved in a database with [mongodb_store](http://wiki.ros.org/mongodb_store) as a [Table.msg](msg/Table.msg). The table_viewpoint.py script creates viewpoints around the edges of the plane and stores them in the database by updating the message. The viewpoints are on each side of the plane and are not checked for reachability yet. 
+Finds areas of interest (horizontal planes, e.g. tables) in a semantically segmented reconstruction of the room. Those areas are saved in a database with [mongodb_store](http://wiki.ros.org/mongodb_store) as a [Table.msg](msg/Table.msg). The table_viewpoint.py script creates viewpoints around the edges of the plane and stores them in the database by updating the message.
 
 ![image.png](./docs/semantic_reconstruction_with_info.png)
 
