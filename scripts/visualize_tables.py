@@ -14,6 +14,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from nav_msgs.msg import OccupancyGrid
 import ros_numpy
 from geometry_msgs.msg import Point
+from table_viewpoint import TableViewpoint
 
 
 from mongodb_store.message_store import MessageStoreProxy
@@ -42,6 +43,9 @@ planes_pub = rospy.Publisher('/table_extractor/table_planes', MarkerArray, queue
 names_list = []
 planes_list = []
 table_nr = 0
+
+viewpoint = TableViewpoint()
+
 for msg, meta in msg_store.query(Table._type):
     points = []
 
@@ -53,6 +57,9 @@ for msg, meta in msg_store.query(Table._type):
     print(msg.id)
     print(msg.category)
     #print(msg.viewposes)
+    for pose in msg.viewposes:
+        viewpoint.draw_marker_rviz_posest(pose)
+
     name.pose.position.z = msg.center.point.z + 0.2
     name.text = '{}_{}'.format(msg.category, msg.id)
     name.color.a = 1.0
