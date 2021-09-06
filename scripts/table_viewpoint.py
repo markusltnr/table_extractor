@@ -161,7 +161,7 @@ class TableViewpoint:
 
         for msg, meta in self.msg_store.query(Table._type):
             points = []
-            print('#{}: {}'.format(msg.id, msg.category))
+            #print('#{}: {}'.format(msg.id, msg.category))
             # convert 3D hull points to numpy and format them
             for point in msg.points:
                 point = ros_numpy.numpify(point.point)
@@ -186,7 +186,7 @@ class TableViewpoint:
                     viewposes.extend(viewposes_line)
             #### sort the saved viewpoints, from highest tablenr to lowest, from longest edge to lowest (Viewpoint_1 is longest edge)
             msg.viewposes = viewposes
-            print(viewposes)
+            #print(viewposes)
             self.msg_store.update_id(meta['_id'], msg)
 
 
@@ -335,7 +335,6 @@ class TableViewpoint:
         receives a viewpose (PoseStamped) and checks if the space around it is free in the reconstruction
         """
         for height in np.arange(0, 2, 0.15):
-            print(height)
             point =[viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z+height]
             [k, idx, _] = self.pcd_tree.search_radius_vector_3d(point, 0.2)
             if k>0:
