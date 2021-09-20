@@ -13,8 +13,7 @@ from cv_bridge import CvBridge
 from image_geometry import PinholeCameraModel
 from mongodb_store.message_store import MessageStoreProxy
 from sensor_msgs.msg import CameraInfo
-from table_extractor.msg import Table
-from stare_at_tables.msg import StareAtTablesAction
+from table_extractor.msg import Table, ReadRosbagAction
 from tf_bag import BagTfTransformer
 import os
 import actionlib
@@ -23,7 +22,7 @@ import actionlib
 
 class ReadRosbag:
     def __init__(self):
-        self.server = actionlib.SimpleActionServer('read_rosbag', StareAtTablesAction, self.execute, False)
+        self.server = actionlib.SimpleActionServer('read_rosbag', ReadRosbagAction, self.execute, False)
         self.server.start()
 
     def execute(self, goal):
