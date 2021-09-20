@@ -66,6 +66,9 @@ class ReadRosbag:
         rgb_topic = self.check_topics(rgb_topic, topics)
         depth_topic = self.check_topics(depth_topic, topics)
         tf_topic = self.check_topics(tf_topic, topics)
+        if rgb_topic is None or depth_topic is None or tf_topic is None:
+            self.server.set_aborted()
+            return
 
         table_txt_file = open(os.path.join(storage_folder, "table.txt"), "w")
 
@@ -266,7 +269,7 @@ class ReadRosbag:
             t = t[1:]
         else:
             print('Topic {} not found.'.format(t))
-            self.server.set_aborted()
+            return None
         return t
 
 if __name__ == '__main__':
