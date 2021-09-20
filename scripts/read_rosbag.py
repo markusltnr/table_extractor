@@ -41,7 +41,9 @@ class ReadRosbag:
         cam = PinholeCameraModel()
         cam.fromCameraInfo(ci)
 
-        storage_folder = rosbag_conf['storage_folder']
+        storage_folder = os.path.join(rosbag_conf['data_folder'], 'read_rosbag' ,'plane_'+str(goal.id))
+        if not os.path.exists(storage_folder):
+            os.makedirs(storage_folder)
         depth_folder = os.path.join(storage_folder,'depth')
         if not os.path.exists(depth_folder):
             os.makedirs(depth_folder)
@@ -58,16 +60,15 @@ class ReadRosbag:
 
         # Check topics
         #TODO 
-        bag_file = os.path.join(rosbag_conf['bag_file'],'stare_at_tables' ,str(goal.id)+'.bag')
+        bag_file = os.path.join(rosbag_conf['data_folder'],'stare_at_tables' ,str(goal.id)+'.bag')
         bag = rosbag.Bag(bag_file)
         topics = bag.get_type_and_topic_info()[1].keys()
         rgb_topic = self.check_topics(rgb_topic, topics)
         depth_topic = self.check_topics(depth_topic, topics)
         tf_topic = self.check_topics(tf_topic, topics)
 
-        table_txt_file = open(storage_folder + "table.txt", "w")
+        table_txt_file = open(os.path.join(storage_folder, "table.txt"), "w")
 
-        centers = []
         bbx_points = None
         msg_store = MessageStoreProxy()
         nr_of_tables = len(msg_store.query(Table._type))
@@ -93,26 +94,25 @@ class ReadRosbag:
         tf_count = 0
         log = []
 
-        log_txt_file = open(storage_folder + "log.txt", "w")
+        log_txt_file = open(os.path.join(storage_folder, "log.txt"), "w")
 
         depth_txt_files = []
         rgb_txt_files = []
         tf_txt_files = []
         table_folders = []
-        for i in range(nr_of_tables):
-            table_folder = os.path.join(plane_folder, "{}".format(i))
-            if not os.path.exists(table_folder):
-                os.makedirs(table_folder)
-            table_folders.append(table_folder)
-            depth_txt_files.append([])
-            rgb_txt_files.append([])
-            tf_txt_files.append([])
+        #for i in range(nr_of_tables):
+        table_folder = plane_folder
+        if not os.path.exists(table_folder):
+            os.makedirs(table_folder)
+        table_folders.append(plane_folder)
+        depth_txt_files.append([])
+        rgb_txt_files.append([])
+        tf_txt_files.append([])
 
-        table_seen = np.zeros(nr_of_tables, dtype=bool)
-        table_seen_prev = np.zeros(nr_of_tables, dtype=bool)
-        table_seen_list = np.zeros((rosbag_conf['series_size'], nr_of_tables), dtype=bool)
-        table_occ = np.zeros(nr_of_tables, int)
-        tf_cam_map = np.zeros([nr_of_tables, 7], dtype=float) #x y z qx qy qz qw
+        table_seen = False
+        table_seen_prev = False
+        #table_seen_list = np.zeros((rosbag_conf['series_size']), dtype=bool)
+        tf_cam_map = np.zeros(7, dtype=float) #x y z qx qy qz qw
         print('Fill Transformer from bag')
         bag_transformer = BagTfTransformer(bag)
         print('Check viewpoints')
@@ -134,101 +134,100 @@ class ReadRosbag:
                             u, v = cam.project3dToPixel(point[:3])
                             if 0 <= u <= cam.width and 0 <= v <= cam.height:
                                 table_seen[i] = True
+                    #for j in range(nr_of_tables):
+                    if (not table_seen_prev): #and all(table_seen_list[:]):
+                        log.append('Table {}, start at {}\n'.format(goal.id, t.to_sec()))
+                        log_txt_file.write('Table {}, start at {}. Transform:\n'.format(goal.id, t.to_sec()))
+                        log_txt_file.write("{:.9f}".format(t.to_sec()) + " - " + str(transmat) + "\n")
 
-                    for j in range(nr_of_tables):
-                        if (not table_seen_prev[j]) and all(table_seen_list[:, j]):
-                            log.append('Table {}, start at {}, occurance {}\n'.format(j, t.to_sec(), table_occ[j]))
-                            log_txt_file.write('Table {}, start at {}, occurance {}. Transform:\n'.format(j, t.to_sec(), table_occ[j]))
-                            log_txt_file.write("{:.9f}".format(t.to_sec()) + " - " + str(transmat) + "\n")
-
-                            depth_occ_filename = os.path.join(table_folders[j], "depth_{}.txt".format(table_occ[j]))
-                            depth_txt_files[j].append(open(depth_occ_filename, "w"))
-                            rgb_occ_filename = os.path.join(table_folders[j], "rgb_{}.txt".format(table_occ[j]))
-                            rgb_txt_files[j].append(open(rgb_occ_filename, "w"))
-                            tf_occ_filename = os.path.join(table_folders[j], "tf_{}.txt".format(table_occ[j]))
-                            tf_txt_files[j].append(open(tf_occ_filename, "w"))
-                            table_occ[j] +=1
-                        elif table_seen_prev[j] and not any(table_seen_list[:, j]):
-                            log.append('Table {}, stop at {}, occurance {}\n'.format(j, t.to_sec(), table_occ[j]))
-                        if all(table_seen_list[:, j]):
-                            table_seen_prev[j] = True
-                        elif not any(table_seen_list[:, j]):
-                            table_seen_prev[j] = False
-                        if table_seen_prev[j]:
-                            translation, q = bag_transformer.lookupTransform('map', cam.tf_frame, t)  # q = x,y,z,w
-                            tf_cam_map[j] = np.array(translation + q)
-                            tf_txt_file = tf_txt_files[j][table_occ[j] - 1]
-                            tf_txt_file.write("{:.9f} {} {} {} {} {} {} {}\n".format(t.to_sec(), translation[0], translation[1], translation[2], q[0], q[1], q[2], q[3]))
-                    table_seen_list = np.roll(table_seen_list, -1, 0)
-                    table_seen_list[-1,:] = table_seen
-
+                        depth_occ_filename = os.path.join(table_folder, "depth.txt")
+                        depth_txt_file = open(depth_occ_filename, "w")
+                        rgb_occ_filename = os.path.join(table_folder, "rgb.txt")
+                        rgb_txt_file = open(rgb_occ_filename, "w")
+                        tf_occ_filename = os.path.join(table_folder, "tf.txt")
+                        tf_txt_file = open(tf_occ_filename, "w")
+                    elif table_seen_prev and not any(table_seen):#any(table_seen_list[:]):
+                        log.append('Table {}, stop at {}\n'.format(j, t.to_sec()))
+                    #if #all(table_seen_list[:]):
+                    #    table_seen_prev = True
+                    #elif not any(table_seen_list[:]):
+                    #    table_seen_prev = False
+                    if table_seen_prev:
+                        translation, q = bag_transformer.lookupTransform('map', cam.tf_frame, t)  # q = x,y,z,w
+                        tf_cam_map = np.array(translation + q)
+                        tf_txt_file.write("{:.9f} {} {} {} {} {} {} {}\n".format(t.to_sec(), translation[0], translation[1], translation[2], q[0], q[1], q[2], q[3]))
+                    
+                    #print(table_seen_list)
+                    #table_seen_list = np.roll(table_seen_list, -1, 0)
+                    #table_seen_list[-1] = table_seen
+                    table_seen_prev = any(table_seen)
             if topic==depth_topic:
                 if depth_count % step_size == 0:
                     cv_img = bridge.imgmsg_to_cv2(msg, "32FC1")
                     
                     cv_imgOrig = bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
                     #get minMax3D from hullPoints, call passThrough filter, set depth to very high value if outside
-                    for i in range(nr_of_tables):
-                        if table_seen_prev[i]:
-                            cv_img_filtered = cv_img.copy()
-                            #project 2d depth points in 3D camera frame and then transform in map-frame
-                            translation = tf_cam_map[i][0:3]
-                            rot = tf_cam_map[i][3:]
-                            rot_mat = tf3d.quaternions.quat2mat([rot[3], rot[0], rot[1], rot[2]])  # q = w,x,y,z
-                            transmat = np.eye(4)
-                            transmat[:3, :3] = rot_mat
-                            transmat[:3, 3] = translation
+                    #for i in range(nr_of_tables):
+                    i = goal.id
+                    if table_seen_prev:   
+                        cv_img_filtered = cv_img.copy()
+                        #project 2d depth points in 3D camera frame and then transform in map-frame
+                        translation = tf_cam_map[0:3]
+                        rot = tf_cam_map[3:]
+                        rot_mat = tf3d.quaternions.quat2mat([rot[3], rot[0], rot[1], rot[2]])  # q = w,x,y,z
+                        transmat = np.eye(4)
+                        transmat[:3, :3] = rot_mat
+                        transmat[:3, 3] = translation
 
-                            # find min and max values of convex hull
-                            margin = 0.75
-                            x_max = max(map(lambda coords: coords[0], hull_points[i])) + margin
-                            x_min = min(map(lambda coords: coords[0], hull_points[i])) - margin
-                            y_max = max(map(lambda coords: coords[1], hull_points[i])) + margin
-                            y_min = min(map(lambda coords: coords[1], hull_points[i])) - margin
-                            #z_max = max(map(lambda coords: coords[2], hull_points[i])) + margin
-                            #z_min = min(map(lambda coords: coords[2], hull_points[i])) - margin
-                            #print("x_min: {}, x_max: {}, y_min: {}, y_max: {}".format(x_min, x_max, y_min, y_max))
+                        # find min and max values of convex hull
+                        margin = 0.75
+                        x_max = max(map(lambda coords: coords[0], hull_points[i])) + margin
+                        x_min = min(map(lambda coords: coords[0], hull_points[i])) - margin
+                        y_max = max(map(lambda coords: coords[1], hull_points[i])) + margin
+                        y_min = min(map(lambda coords: coords[1], hull_points[i])) - margin
+                        #z_max = max(map(lambda coords: coords[2], hull_points[i])) + margin
+                        #z_min = min(map(lambda coords: coords[2], hull_points[i])) - margin
+                        #print("x_min: {}, x_max: {}, y_min: {}, y_max: {}".format(x_min, x_max, y_min, y_max))
 
-                            width = cam.width
-                            height = cam.height
-                            nx = np.linspace(0, width - 1, width)
-                            ny = np.linspace(0, height - 1, height)
-                            u, v = np.meshgrid(nx, ny)
-                            x = (u.flatten() - cam.cx()) / cam.fx()
-                            y = (v.flatten() - cam.cy()) / cam.fy()
+                        width = cam.width
+                        height = cam.height
+                        nx = np.linspace(0, width - 1, width)
+                        ny = np.linspace(0, height - 1, height)
+                        u, v = np.meshgrid(nx, ny)
+                        x = (u.flatten() - cam.cx()) / cam.fx()
+                        y = (v.flatten() - cam.cy()) / cam.fy()
 
-                            z = cv_img.flatten() / 1000;
-                            x = np.multiply(x, z)
-                            y = np.multiply(y, z)
+                        z = cv_img.flatten() / 1000;
+                        x = np.multiply(x, z)
+                        y = np.multiply(y, z)
 
-                            w_arr=np.ones(x.shape)
-                            img_cam  = np.vstack((x,y,z,w_arr)).T
-                            
-                            #img_cam = []
-                            #for v in range(cam.height):
-                            #    for u in range(cam.width):
-                            #        d = cv_img[v,u] * 0.001
-                            #        x_cam = d * (u - cam.cx()) / cam.fx()
-                            #        y_cam = d * (v - cam.cy()) / cam.fy()
-                            #        z_cam = d;
+                        w_arr=np.ones(x.shape)
+                        img_cam  = np.vstack((x,y,z,w_arr)).T
+                        
+                        #img_cam = []
+                        #for v in range(cam.height):
+                        #    for u in range(cam.width):
+                        #        d = cv_img[v,u] * 0.001
+                        #        x_cam = d * (u - cam.cx()) / cam.fx()
+                        #        y_cam = d * (v - cam.cy()) / cam.fy()
+                        #        z_cam = d;
 
-                            #       point = np.array([x_cam,y_cam,z_cam, 1.0])
-                            #       img_cam.append(point)
+                        #       point = np.array([x_cam,y_cam,z_cam, 1.0])
+                        #       img_cam.append(point)
 
-                            #transformation in cam frame
-                            img_in_map = np.matmul(transmat, np.array(img_cam).T).T #TODO, what is correct here?
-                            
-                            img_mask = (img_in_map[:,0] < x_min) | (img_in_map[:,0] > x_max) | (img_in_map[:,1] < y_min) | (img_in_map[:,1] > y_max) 
-                            
-                            temp = cv_imgOrig.copy().flatten()
-                            temp[img_mask] = 0
+                        #transformation in cam frame
+                        img_in_map = np.matmul(transmat, np.array(img_cam).T).T #TODO, what is correct here?
+                        
+                        img_mask = (img_in_map[:,0] < x_min) | (img_in_map[:,0] > x_max) | (img_in_map[:,1] < y_min) | (img_in_map[:,1] > y_max) 
+                        
+                        temp = cv_imgOrig.copy().flatten()
+                        temp[img_mask] = 0
 
-                            temp = np.reshape(temp, (cam.height, cam.width))
-                            depth_img_cnt = "depth%05i" % (depth_count / step_size)
-                            depth_img_name = depth_img_cnt + "_{0}_{1}.png".format(i,table_occ[i-1])
-                            cv2.imwrite(os.path.join(depth_folder, depth_img_name), temp)
-                            depth_txt_file = depth_txt_files[i][table_occ[i]-1]
-                            depth_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " ../../depth/" + depth_img_name + "\n")
+                        temp = np.reshape(temp, (cam.height, cam.width))
+                        depth_img_cnt = "depth%05i" % (depth_count / step_size)
+                        depth_img_name = depth_img_cnt + "_{0}.png".format(i)
+                        cv2.imwrite(os.path.join(depth_folder, depth_img_name), temp)
+                        depth_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " ../../depth/" + depth_img_name + "\n")
                 depth_count += 1
 
             if topic==rgb_topic:
@@ -236,10 +235,10 @@ class ReadRosbag:
                     rgb_img_name = "rgb%05i.png" % (rgb_count/step_size)
                     cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
                     cv2.imwrite(os.path.join(rgb_folder, rgb_img_name), cv_img)
-                    for i in range(nr_of_tables):
-                        if table_seen_prev[i]:
-                            rgb_txt_file = rgb_txt_files[i][table_occ[i]-1]
-                            rgb_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " ../../rgb/" + rgb_img_name + "\n")
+                    #for i in range(nr_of_tables):
+                    i = goal.id
+                    if table_seen_prev:
+                        rgb_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " ../../rgb/" + rgb_img_name + "\n")
                 rgb_count += 1
 
 
