@@ -142,6 +142,9 @@ class TableExtractor:
                     #find out which class the plane belongs to
                     unique, counts = np.unique(color_labels, return_counts=True)
                     counts_idx = np.where(counts == np.amax(counts))
+                    
+                    if unique[counts_idx] == -1:
+                        continue
                     class_name = self.class_names[np.where(self.class_labels == unique[counts_idx][0])[0][0]]
                     h_planeclouds_clustered.append(cloud)
                     cloud_pubs.append(cloud_pub)
@@ -155,13 +158,13 @@ class TableExtractor:
                     table.center.point.x = center[0]
                     table.center.point.y = center[1]
                     table.center.point.z = center[2]
-                    table.center.header.frame_id = 'map'
+                    table.center.header.frame_id = '/map'
                     table.plane = plane
                     table_points = []
                     for point in points:
                         pointstamped = geometry_msgs.msg.PointStamped()
                         pointstamped.point = ros_numpy.msgify(geometry_msgs.msg.Point, point.astype(np.float32))
-                        pointstamped.header.frame_id = 'map'
+                        pointstamped.header.frame_id = '/map'
                         table_points.append(pointstamped)
                         #table_points.append(ros_numpy.msgify(geometry_msgs.msg.Point, point.astype(np.float32)))
                     table.points = table_points
@@ -188,7 +191,7 @@ class TableExtractor:
         table_map.info.resolution = self.res
         table_map.info.origin.position.x = -self.delta_x
         table_map.info.origin.position.y = -self.delta_y
-        table_map.header.frame_id = 'map'
+        table_map.header.frame_id = '/map'
         cv.imwrite("table_map.pgm", img)
 
         map_pub.publish(table_map)
@@ -218,7 +221,7 @@ class TableExtractor:
 
 
     # Convert the datatype of point cloud from Open3D to ROS PointCloud2 (XYZRGB only)
-    def o3dToROS(self, open3d_cloud, frame_id="map"):
+    def o3dToROS(self, open3d_cloud, frame_id="/map"):
         # The data structure of each point in ros PointCloud2: 16 bits = x + y + z + rgb
         FIELDS_XYZ = [
             PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),

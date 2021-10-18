@@ -6,17 +6,27 @@ import smach_ros
 
 from table_extractor_script import TableExtractor
 from table_viewpoint import TableViewpoint
-from stare_at_tables.msg import StareAtTablesAction
+#from stare_at_tables.msg import StareAtTablesAction
+from edith_msgs.msg import Table, IdAction
+from edith_msgs.srv import Id, SparseCN, SparseCNRequest
+
+#from elastic_fusion_ros.msg import ElasticFusionAction
 from mongodb_store.message_store import MessageStoreProxy
-from table_extractor.msg import Table 
+#from table_extractor.msg import Table 
+#from png_to_klg.srv import PngToKlg
+from std_srvs.srv import Empty
+#from sparseconvnet_ros.srv import execute, executeRequest
+import subprocess
+import os
 
 
 
 class UserInputState(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['quit', 'start', 'table_patrolling'],
+        smach.State.__init__(self, outcomes=['quit', 'start', 'table_patrolling', 'read_rosbag', 'png_to_klg', 
+                                            'generate_mesh', 'clear_mesh'],
                                     input_keys=[],
-                                    output_keys=[])
+                                    output_keys=['id'])
 
 
     def execute(self, userdata):
@@ -39,15 +49,33 @@ class UserInputState(smach.State):
             elif char_in == 's':
                 rospy.loginfo('Clear Database and start Pipeline with Table Extractor')
                 return 'start'
-            elif char_in == 'c':
+            elif char_in == 't':
                 rospy.loginfo('Start Pipeline with Table Patrolling')
                 return 'table_patrolling'
+            elif char_in == 'r':
+                rospy.loginfo('Start Pipeline with Read Rosbag')
+                return 'read_rosbag'
+            elif char_in == 'p':
+                rospy.loginfo('Start Pipeline with PNG to KLG')
+                return 'png_to_klg'
+            elif char_in == 'm':
+                rospy.loginfo('Voxblox: Generate Mesh + SparseConvNet')
+                return 'generate_mesh'
+            elif char_in == 'c':
+                rospy.loginfo('Voxblox: Clear Mesh')
+                return 'clear_mesh'
             # Unrecognized command
             else:
                 rospy.logwarn('Unrecognized command %s', char_in)
     def print_info(self):
-        print('s - Start Pipeline from beginning')
-        print('c - Start from Table Patrolling')
+        print('m - Voxblox: Generate Mesh + SparseConvNet')
+        print('c - Voxblox: Clear Mesh')
+        print('s - Start Pipeline from Table Extractor')
+        print('t - Start Pipeline with Table Patrolling')
+        print('r - Start Pipeline with Read Rosbag')
+        print('p - Start Pipeline with PNG to KLG')
+
+
         print('q - Quit')
         
 class ClearDatabaseState(smach.State):
@@ -59,6 +87,25 @@ class ClearDatabaseState(smach.State):
         for msg, meta in self.msg_store.query(Table._type):
             self.msg_store.delete(str(meta.get('_id')))
         return 'succeeded'
+
+
+class FetchReconstructionFile(smach.State):
+    def __init__(self):
+        smach.State.__init__(self, outcomes=['succeeded', 'aborted'])
+
+        self.remote_path = rospy.get_param('/table_extractor/remote_path', 
+            'v4r@10.0.0.112:/media/v4r/FF64-D891/tidy_up_pipeline/hsrb_result_pred_legend_21.ply')
+        self.local_path = rospy.get_param('/table_extractor/local_path', 
+            '/home/v4r/Markus_L/reconstruction.ply')
+    
+    def execute(self, ud):
+        cmd_move = ['scp', self.remote_path, self.local_path]
+        move = subprocess.Popen(cmd_move, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        move.wait()
+        if os.path.exists(self.local_path):
+            return 'succeeded'
+        else:
+            return 'aborted'
 
 class TableExtractorState(smach.State):
     def __init__(self):
@@ -89,28 +136,25 @@ class GenerationFinishedState(smach.State):
         self.id_counter = 0
 
     def execute(self, userdata):
-        userdata.id = self.id_counter
+        i = 0
 
-        if self.id_counter < len(self.msg_store.query(Table._type)):
-            self.id_counter += 1
-            return 'more_tables'
-        else:
-            self.id_counter = 0
-            return 'all_tables'
-        # for msg, meta in self.msg_store.query(Table._type):
-        #     if msg.category == 'table':
-        #         userdata.id = msg.id
-        #         return 'more_tables'
+#        userdata.id = self.id_counter
 
-class DummyState(smach.State): 
-    def __init__(self):
-        smach.State.__init__(self, outcomes=['succeeded'], input_keys=['id'])
-        self.msg_store = MessageStoreProxy()
-    
-    def execute(self, ud):
-        print(ud.id)
-        print(self.msg_store.query(Table._type)[ud.id][0].id)
-        return 'succeeded'
+#        if self.id_counter < len(self.msg_store.query(Table._type)):
+#            self.id_counter += 1
+#            if 
+#            return 'more_tables'
+#        else:
+#            self.id_counter = 0
+#            return 'all_tables'
+        for msg, meta in self.msg_store.query(Table._type):
+            if msg.category == 'table':
+                if i >= self.id_counter:
+                    userdata.id = msg.id
+                    #self.id_counter += 1
+                    return 'more_tables'
+                i += 1
+        return 'more_tables'
 
 
 def main():
@@ -124,11 +168,20 @@ def main():
                                UserInputState(), \
                                transitions={'quit':'end', 
                                             'start':'CLEAR_DATABASE_STATE',
-                                            'table_patrolling':'GENERATION_FINISHED_STATE'})
+                                            'table_patrolling':'GENERATION_FINISHED_STATE',
+                                            'read_rosbag':'READ_ROSBAG',
+                                            'png_to_klg':'PNG_TO_KLG',
+                                            'generate_mesh':'GENERATE_MESH',
+                                            'clear_mesh':'CLEAR_MESH'})
         
         smach.StateMachine.add('CLEAR_DATABASE_STATE', \
                                ClearDatabaseState(), \
-                               transitions={'succeeded':'TABLE_EXTRACTOR_STATE'})
+                               transitions={'succeeded':'FETCH_RECONSTRUCTION_FILE'})
+        
+        smach.StateMachine.add('FETCH_RECONSTRUCTION_FILE', \
+                               FetchReconstructionFile(), \
+                               transitions={'succeeded':'TABLE_EXTRACTOR_STATE',
+                                            'aborted':'USER_INPUT_STATE'})
         
         smach.StateMachine.add('TABLE_EXTRACTOR_STATE',
                                 TableExtractorState(), \
@@ -145,16 +198,57 @@ def main():
                                 transitions={'more_tables' : 'STARE_AT_TABLES',
                                             'all_tables' : 'end'})
 
-        # smach.StateMachine.add('DUMMY_STATE', 
-        #                         DummyState(), \
-        #                         transitions={'succeeded' : 'GENERATION_FINISHED_STATE'})
-
         smach.StateMachine.add('STARE_AT_TABLES', \
-                                smach_ros.SimpleActionState('stare_at_tables', StareAtTablesAction, 
+                                smach_ros.SimpleActionState('stare_at_tables', IdAction, 
                                                             goal_slots = ['id']),
-                                transitions={'succeeded':'GENERATION_FINISHED_STATE', 
+                                transitions={'succeeded':'READ_ROSBAG', 
                                             'preempted':'USER_INPUT_STATE',
                                             'aborted':'USER_INPUT_STATE'})
+
+        smach.StateMachine.add('READ_ROSBAG', \
+                                smach_ros.SimpleActionState('read_rosbag', IdAction, 
+                                                            goal_slots = ['id']),
+                                transitions={'succeeded':'PNG_TO_KLG', 
+                                            'preempted':'USER_INPUT_STATE',
+                                            'aborted':'USER_INPUT_STATE'})
+        
+        smach.StateMachine.add('PNG_TO_KLG',
+                                smach_ros.ServiceState('png_to_klg',
+                                                Id,
+                                                request_slots = ['id']),
+                                transitions={'succeeded':'ELASTIC_FUSION_ROS', 
+                                            'preempted':'USER_INPUT_STATE',
+                                            'aborted':'USER_INPUT_STATE'})
+
+        smach.StateMachine.add('ELASTIC_FUSION_ROS',
+                                smach_ros.SimpleActionState('elastic_fusion_ros', IdAction, 
+                                                            goal_slots = ['id']),
+                                transitions={'succeeded':'USER_INPUT_STATE', 
+                                            'preempted':'USER_INPUT_STATE',
+                                            'aborted':'USER_INPUT_STATE'})
+
+        smach.StateMachine.add('GENERATE_MESH',
+                                smach_ros.ServiceState('voxblox_node/generate_mesh',
+                                                Empty),
+                                transitions={'succeeded':'SPARSE_CONV_NET', 
+                                            'preempted':'USER_INPUT_STATE',
+                                            'aborted':'USER_INPUT_STATE'})
+
+        smach.StateMachine.add('CLEAR_MESH',
+                                smach_ros.ServiceState('voxblox_node/clear_map',
+                                                Empty),
+                                transitions={'succeeded':'USER_INPUT_STATE', 
+                                            'preempted':'USER_INPUT_STATE',
+                                            'aborted':'USER_INPUT_STATE'})
+
+        smach.StateMachine.add('SPARSE_CONV_NET',
+                                smach_ros.ServiceState('sparseconvnet_ros/sparseconvnet_ros_service/execute',
+                                                SparseCN, request=SparseCNRequest('/root/share/hsrb_result.ply')),
+                                transitions={'succeeded':'USER_INPUT_STATE', 
+                                            'preempted':'USER_INPUT_STATE',
+                                            'aborted':'USER_INPUT_STATE'})
+
+
 
     # Create and start the introspection server
     sis = smach_ros.IntrospectionServer('server_name', sm, '/SM_ROOT')
