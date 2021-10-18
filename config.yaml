@@ -1,8 +1,8 @@
 rosbag:
     step_size: 2
     series_size: 15
-    depth_topic: '/hsrb/head_rgbd_sensor/depth_registered/image_rect_raw'
-    rgb_topic: '/hsrb/head_rgbd_sensor/rgb/image_rect_color'
+    depth_topic: '/hsrb/head_rgbd_sensor/depth_registered/image_raw'
+    rgb_topic: '/hsrb/head_rgbd_sensor/rgb/image_raw'
     tf_topic: '/tf'
     data_folder: '/home/v4r/data/'
     bag_file: '/home/v4r/data/rosbag.bag'

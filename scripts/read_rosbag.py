@@ -66,6 +66,9 @@ class ReadRosbag:
         rgb_topic = self.check_topics(rgb_topic, topics)
         depth_topic = self.check_topics(depth_topic, topics)
         tf_topic = self.check_topics(tf_topic, topics)
+        if rgb_topic is None or depth_topic is None or tf_topic is None:
+            self.server.set_aborted()
+            return
 
         table_txt_file = open(os.path.join(storage_folder, "table.txt"), "w")
 
@@ -227,7 +230,7 @@ class ReadRosbag:
                         depth_img_cnt = "depth%05i" % (depth_count / step_size)
                         depth_img_name = depth_img_cnt + "_{0}.png".format(i)
                         cv2.imwrite(os.path.join(depth_folder, depth_img_name), temp)
-                        depth_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " ../../depth/" + depth_img_name + "\n")
+                        depth_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " depth/" + depth_img_name + "\n")
                 depth_count += 1
 
             if topic==rgb_topic:
@@ -238,7 +241,7 @@ class ReadRosbag:
                     #for i in range(nr_of_tables):
                     i = goal.id
                     if table_seen_prev:
-                        rgb_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " ../../rgb/" + rgb_img_name + "\n")
+                        rgb_txt_file.write(str(msg.header.stamp.secs) + "." + str(msg.header.stamp.nsecs).zfill(9) + " rgb/" + rgb_img_name + "\n")
                 rgb_count += 1
 
 
@@ -266,7 +269,7 @@ class ReadRosbag:
             t = t[1:]
         else:
             print('Topic {} not found.'.format(t))
-            self.server.set_aborted()
+            return None
         return t
 
 if __name__ == '__main__':
