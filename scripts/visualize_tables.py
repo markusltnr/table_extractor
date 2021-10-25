@@ -50,7 +50,7 @@ for msg, meta in msg_store.query(Table._type):
     points = []
 
     name = Marker()
-    name.header.frame_id = '/map'
+    name.header.frame_id = 'map'
     name.type = 9 #TEXT_VIEW_FACING=9
     name.id = table_nr
     name.pose.position = msg.center.point
@@ -77,7 +77,7 @@ for msg, meta in msg_store.query(Table._type):
     for i in range(8):
         box_points_ros.append(ros_numpy.msgify(Point, box_points[i,:]))
     bbx = Marker()
-    bbx.header.frame_id = '/map'
+    bbx.header.frame_id = 'map'
     bbx.type = 4
     bbx.id = table_nr
     bbx.points = [x.point for x in msg.points]
