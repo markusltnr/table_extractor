@@ -12,7 +12,7 @@ from geometry_msgs.msg import Point, PoseStamped, Quaternion
 from visualization_msgs.msg import MarkerArray, Marker
 
 from mongodb_store.message_store import MessageStoreProxy
-from table_extractor.msg import Table 
+from edith_msgs.msg import Table 
 import ros_numpy
 import open3d as o3d
 

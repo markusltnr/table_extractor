@@ -8,7 +8,7 @@ import yaml
 
 from std_msgs.msg import Header
 from sensor_msgs.msg import PointCloud2, PointField
-from table_extractor.msg import Table
+from edith_msgs.msg import Table
 from visualization_msgs.msg import Marker, MarkerArray
 
 from nav_msgs.msg import OccupancyGrid

@@ -11,8 +11,7 @@ import sensor_msgs.point_cloud2 as pc2
 import yaml
 from mongodb_store.message_store import MessageStoreProxy
 from nav_msgs.msg import OccupancyGrid
-from table_extractor.msg import Table
-from table_extractor.msg import Plane
+from edith_msgs.msg import Table, Plane
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Header
 from region_growing import RegionGrowing
@@ -142,10 +141,15 @@ class TableExtractor:
                     #find out which class the plane belongs to
                     unique, counts = np.unique(color_labels, return_counts=True)
                     counts_idx = np.where(counts == np.amax(counts))
+                    print(c, counts_idx)
                     
-                    if unique[counts_idx] == -1:
+                    if any(unique[counts_idx]) == -1:
+                        print(c, 'skip')
                         continue
-                    class_name = self.class_names[np.where(self.class_labels == unique[counts_idx][0])[0][0]]
+                    try:
+                        class_name = self.class_names[np.where(self.class_labels == unique[counts_idx][0])[0][0]]
+                    except:
+                        continue
                     h_planeclouds_clustered.append(cloud)
                     cloud_pubs.append(cloud_pub)
                     #save tables in mongodb
