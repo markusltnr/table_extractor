@@ -14,7 +14,7 @@ from nav_msgs.msg import OccupancyGrid
 from edith_msgs.msg import Table, Plane
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Header
-from region_growing import RegionGrowing
+from region_growing_by_distance import RegionGrowingByDistanceOnly
 
 
 
@@ -36,12 +36,16 @@ class TableExtractor:
         self.radius = ext_conf['remove_radius_outlier_radius']
         self.eps = ext_conf['cluster_dbscan_eps']
         self.minpoints = ext_conf['cluster_dbscan_minpoints']
-        self.min_csp = ext_conf['min_cluster_size_param']
+        #self.min_csp = ext_conf['min_cluster_size_param']
         self.height = ext_conf['map_height']
         self.width = ext_conf['map_width']
         self.delta_x = ext_conf['map_deltax']
         self.delta_y = ext_conf['map_deltay']
         self.res = ext_conf['map_resolution']
+        
+        self.min_cluster_size = ext_conf['min_cluster_size']
+        self.normals_kNN = ext_conf['normals_kNN']
+        self.normals_search_radius = ext_conf['normals_search_radius']
 
     def execute(self):
         msg_store = MessageStoreProxy()
@@ -61,7 +65,7 @@ class TableExtractor:
         pcd = pcd.voxel_down_sample(voxel_size=self.dwn_vox)
 
         #compute normals and filter out any points that are not on horizontal area
-        pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+        pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=normals_search_radius, max_nn=normals_kNN))
         normals = np.asarray(pcd.normals)
         pcd = pcd.select_down_sample(np.where((abs(normals[:, 0]) < self.normals_thresh) 
                                                         & (abs(normals[:, 1]) < self.normals_thresh))[0])
@@ -88,7 +92,7 @@ class TableExtractor:
         h_plane_clouds = [] #list of horizontal plane pointclouds, not clustered
 
         #get planes with RANSAC
-        while len(outlier_cloud.points)>size_cof*self.min_csp:
+        while len(outlier_cloud.points)>minpoints and big_clusters_left:
             plane_model, inliers = outlier_cloud.segment_plane(distance_threshold=0.02,
                                                     ransac_n=3,
                                                     num_iterations=1000)
@@ -96,7 +100,20 @@ class TableExtractor:
             print("Plane equation: {}x + {}y + {}z + {} = 0".format(a,b,c,d))
 
             inlier_cloud = outlier_cloud.select_down_sample(inliers)
-            outlier_cloud = outlier_cloud.select_down_sample(inliers, invert=True)
+
+            # region growing
+            rg = RegionGrowingByDistanceOnly(scene_filtered)
+            rg.set_plane(inlier_cloud)
+            inlier_cloud, rg_inliers = rg.grow_region() #scene indices
+
+            scene_filtered = scene_filtered.select_down_sample(rg_inliers, invert=True)
+            color = -np.ones((np.asarray(scene_filtered.colors).shape[0]))
+            for point, i in zip(np.asarray(scene_filtered.colors), range(len(scene_filtered.colors))):
+               for label in class_labels:
+                   if all(np.isclose(point, colors[label])):
+                      color[i] = label
+            index_interest = np.where(color > 0)[0]
+            outlier_cloud = scene_filtered.select_down_sample(index_interest)
             #o3d.visualization.draw_geometries([inlier_cloud, pcd])
             plane = Plane()
             plane.x = a
@@ -105,6 +122,22 @@ class TableExtractor:
             plane.d = d
             h_planes.append(plane)
             h_plane_clouds.append(inlier_cloud)
+            
+            if len(rg_inliers) < min_cluster_size:
+               big_clusters_left = False
+               continue
+
+            #break if there are only small clusters left
+            idx = outlier_cloud.cluster_dbscan(eps, minpoints)
+            values = np.unique(idx)
+            for c in values:
+                #select clustered plane cloud
+                cluster_idx = np.where(np.asarray(idx) == c)
+                if len(cluster_idx[0]) > min_cluster_size:
+                   big_clusters_left = True;
+                   break
+                else:
+                   big_clusters_left = False
 
         img = np.zeros([self.height, self.width, 1], dtype=np.int8)
         table = Table()
@@ -123,10 +156,10 @@ class TableExtractor:
                 #select clustered plane cloud
                 cluster_idx = np.where(np.asarray(idx) == c)
                 cloud = planecloud.select_down_sample(cluster_idx[0])
-                if len(cloud.points) > size_cof*self.min_csp:
+                if len(cloud.points) > min_cluster_size:
                     #region growing
-                    rg.set_plane(cloud)
-                    cloud = rg.grow_region()
+                    #rg.set_plane(cloud)
+                    #cloud = rg.grow_region()
                     #publishing clouds
                     cloud_pub = rospy.Publisher(
                         '/cloud'+str(i+1), PointCloud2, queue_size=10, latch=True)

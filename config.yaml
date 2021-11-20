@@ -1,8 +1,8 @@
 rosbag:
     step_size: 2
     series_size: 15
-    depth_topic: '/hsrb/head_rgbd_sensor/depth_registered/image_raw'
-    rgb_topic: '/hsrb/head_rgbd_sensor/rgb/image_raw'
+    depth_topic: '/hsrb/head_rgbd_sensor/depth_registered/image_rect_raw'
+    rgb_topic: '/hsrb/head_rgbd_sensor/rgb/image_rect_color'
     tf_topic: '/tf'
     data_folder: '/home/v4r/data/'
     bag_file: '/home/v4r/data/rosbag.bag'
@@ -18,20 +18,22 @@ table_extractor:
                         #If |x| or |y| of the normal is bigger than the threshold, the point is removed from the cloud. 
     reconstruction_file: "/home/v4r/data/reconstruction.ply"
     downsample_vox_size: 0.02 # voxel size for downsampling
+    normals_search_radius: 0.1
+    normals_kNN: 30
     remove_radius_outlier_nbpoints: 4 #12
     remove_radius_outlier_radius:  0.05 #0.1
-    cluster_dbscan_eps: 0.2 #0.05 # 0.1 # Density parameter that is used to find neighbouring points.
+    cluster_dbscan_eps: 0.1 #0.05 # 0.1 # Density parameter that is used to find neighbouring points.
     cluster_dbscan_minpoints: 10 #20 Minimum number of points to form a cluster.
-    min_cluster_size_param: 0.015 # minimum 1% of pointcloud have to be in plane 
+    min_cluster_size: 50 
     map_height: 500
     map_width: 500
     map_deltax: 10.0
     map_deltay: 8.0
     map_resolution: 0.03
-    class_labels: [2,3,5,6,9,11,13,14,31,37,38]
-    class_names: ['cabinet', 'bed', 'sofa', 'table', 
+    class_labels: [2,3,4,5,6,9,11,13,14,31,37,38,39]
+    class_names: ['cabinet', 'bed', 'chair', 'sofa', 'table', 
         'bookshelf','counter', 'desk', 'shelves', 
-        'night stand', 'otherstructure', 'otherfurn'] 
+        'night stand', 'otherstructure', 'otherfurn', 'otherprop'] 
     colors: [[190, 153, 112],  # wall 0
     [189, 198, 255],  # floor 1
     [213, 255, 0],  # cabinet 2
