@@ -11,11 +11,10 @@ import sensor_msgs.point_cloud2 as pc2
 import yaml
 from mongodb_store.message_store import MessageStoreProxy
 from nav_msgs.msg import OccupancyGrid
-from table_extractor.msg import Table
-from table_extractor.msg import Plane
+from edith_msgs.msg import Table, Plane
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Header
-from region_growing import RegionGrowing
+from region_growing_by_distance import RegionGrowingByDistanceOnly
 
 
 
@@ -37,12 +36,16 @@ class TableExtractor:
         self.radius = ext_conf['remove_radius_outlier_radius']
         self.eps = ext_conf['cluster_dbscan_eps']
         self.minpoints = ext_conf['cluster_dbscan_minpoints']
-        self.min_csp = ext_conf['min_cluster_size_param']
+        #self.min_csp = ext_conf['min_cluster_size_param']
         self.height = ext_conf['map_height']
         self.width = ext_conf['map_width']
         self.delta_x = ext_conf['map_deltax']
         self.delta_y = ext_conf['map_deltay']
         self.res = ext_conf['map_resolution']
+        
+        self.min_cluster_size = ext_conf['min_cluster_size']
+        self.normals_kNN = ext_conf['normals_kNN']
+        self.normals_search_radius = ext_conf['normals_search_radius']
 
     def execute(self):
         msg_store = MessageStoreProxy()
@@ -62,7 +65,7 @@ class TableExtractor:
         pcd = pcd.voxel_down_sample(voxel_size=self.dwn_vox)
 
         #compute normals and filter out any points that are not on horizontal area
-        pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+        pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=self.normals_search_radius, max_nn=self.normals_kNN))
         normals = np.asarray(pcd.normals)
         pcd = pcd.select_down_sample(np.where((abs(normals[:, 0]) < self.normals_thresh) 
                                                         & (abs(normals[:, 1]) < self.normals_thresh))[0])
@@ -88,16 +91,31 @@ class TableExtractor:
         h_planes = []  #list of horizontal planes (parameters)
         h_plane_clouds = [] #list of horizontal plane pointclouds, not clustered
 
+        scene_filtered = scene
+        big_clusters_left = True
         #get planes with RANSAC
-        while len(outlier_cloud.points)>size_cof*self.min_csp:
-            plane_model, inliers = outlier_cloud.segment_plane(distance_threshold=0.02,
+        while len(outlier_cloud.points)>self.minpoints and big_clusters_left:
+            plane_model, inliers = outlier_cloud.segment_plane(distance_threshold=0.03,
                                                     ransac_n=3,
                                                     num_iterations=1000)
             [a, b, c, d] = plane_model
             print("Plane equation: {}x + {}y + {}z + {} = 0".format(a,b,c,d))
 
             inlier_cloud = outlier_cloud.select_down_sample(inliers)
-            outlier_cloud = outlier_cloud.select_down_sample(inliers, invert=True)
+
+            # region growing
+            rg = RegionGrowingByDistanceOnly(scene_filtered)
+            rg.set_plane(inlier_cloud)
+            inlier_cloud, rg_inliers = rg.grow_region() #scene indices
+
+            scene_filtered = scene_filtered.select_down_sample(rg_inliers, invert=True)
+            color = -np.ones((np.asarray(scene_filtered.colors).shape[0]))
+            for point, i in zip(np.asarray(scene_filtered.colors), range(len(scene_filtered.colors))):
+               for label in self.class_labels:
+                   if all(np.isclose(point, self.colors[label])):
+                      color[i] = label
+            index_interest = np.where(color > 0)[0]
+            outlier_cloud = scene_filtered.select_down_sample(index_interest)
             #o3d.visualization.draw_geometries([inlier_cloud, pcd])
             plane = Plane()
             plane.x = a
@@ -106,13 +124,29 @@ class TableExtractor:
             plane.d = d
             h_planes.append(plane)
             h_plane_clouds.append(inlier_cloud)
+            
+            if len(rg_inliers) < self.min_cluster_size:
+               big_clusters_left = False
+               continue
+
+            #break if there are only small clusters left
+            idx = outlier_cloud.cluster_dbscan(self.eps, self.minpoints)
+            values = np.unique(idx)
+            for c in values:
+                #select clustered plane cloud
+                cluster_idx = np.where(np.asarray(idx) == c)
+                if len(cluster_idx[0]) > self.min_cluster_size:
+                   big_clusters_left = True
+                   break
+                else:
+                   big_clusters_left = False
 
         img = np.zeros([self.height, self.width, 1], dtype=np.int8)
         table = Table()
         h_planeclouds_clustered = []
         cloud_pubs = []
 
-        rg = RegionGrowing(scene)
+        #rg = RegionGrowing(scene)
 
         i = 0
         #cluster all horizontal planes and store data
@@ -124,25 +158,25 @@ class TableExtractor:
                 #select clustered plane cloud
                 cluster_idx = np.where(np.asarray(idx) == c)
                 cloud = planecloud.select_down_sample(cluster_idx[0])
-                if len(cloud.points) > size_cof*self.min_csp:
+                print(len(cloud.points), self.min_cluster_size)
+                if len(cloud.points) > self.min_cluster_size:
                     #region growing
-                    rg.set_plane(cloud)
-                    cloud = rg.grow_region()
+                    #rg.set_plane(cloud)
+                    #cloud = rg.grow_region()
                     #publishing clouds
                     cloud_pub = rospy.Publisher(
                         '/cloud'+str(i+1), PointCloud2, queue_size=10, latch=True)
                     #cloud = cloud.paint_uniform_color(colors[i])
                     #o3d.io.write_point_cloud('/home/v4r/data/cloud'+str(i+1)+'.pcd', cloud)
                     #remove already selected points from cloud
-                    for d in cluster_idx[0]:
-                        pcd.points[d] = np.array(
-                            [np.nan, np.nan, np.nan], dtype=np.float64).reshape(3, 1)
+                    # for d in cluster_idx[0]:
+                    #     pcd.points[d] = np.array(
+                    #         [np.nan, np.nan, np.nan], dtype=np.float64).reshape(3, 1)
                     color_labels = self.get_labels_from_colors(cloud, self.class_labels, self.colors)
                     ### TODO
                     #find out which class the plane belongs to
                     unique, counts = np.unique(color_labels, return_counts=True)
                     counts_idx = np.where(counts == np.amax(counts))
-                    
                     if unique[counts_idx] == -1:
                         continue
                     class_name = self.class_names[np.where(self.class_labels == unique[counts_idx][0])[0][0]]

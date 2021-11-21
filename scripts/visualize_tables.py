@@ -8,7 +8,7 @@ import yaml
 
 from std_msgs.msg import Header
 from sensor_msgs.msg import PointCloud2, PointField
-from table_extractor.msg import Table
+from edith_msgs.msg import Table
 from visualization_msgs.msg import Marker, MarkerArray
 
 from nav_msgs.msg import OccupancyGrid
@@ -33,7 +33,7 @@ ext_conf = conf['table_extractor']
 reconstruction_file = ext_conf['reconstruction_file']
 colors = np.array(ext_conf['colors'], dtype=np.float32)/255
 reconst = o3d.io.read_point_cloud(reconstruction_file)
-reconst_ros = orh.o3dpc_to_rospc(reconst, '/map')
+reconst_ros = orh.o3dpc_to_rospc(reconst, 'map')
 reconst_pub = rospy.Publisher('/table_extractor/reconstruction', PointCloud2, queue_size=10, latch=True)
 
 reconst_pub.publish(reconst_ros)

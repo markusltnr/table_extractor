@@ -12,7 +12,7 @@ from geometry_msgs.msg import Point, PoseStamped, Quaternion
 from visualization_msgs.msg import MarkerArray, Marker
 
 from mongodb_store.message_store import MessageStoreProxy
-from table_extractor.msg import Table 
+from edith_msgs.msg import Table 
 import ros_numpy
 import open3d as o3d
 
@@ -153,7 +153,6 @@ class TableViewpoint:
             hull = ConvexHull(points)
             hull_points = points[hull.vertices]    
             points = approximate_polygon(points[hull.vertices], self.contour_approx_param)
-
             # iterate through all the edges of the contour and calculate the viewpoints from those 
             viewposes = []
             for j in range(len(points) - 1):    
@@ -192,7 +191,7 @@ class TableViewpoint:
         """
         for height in np.arange(0, 2, 0.15):
             point =[viewpose.pose.position.x, viewpose.pose.position.y, viewpose.pose.position.z+height]
-            [k, idx, _] = self.pcd_tree.search_radius_vector_3d(point, 0.2)
+            [k, idx, _] = self.pcd_tree.search_radius_vector_3d(point, 0.34)
             if k>0:
                 return False
         
